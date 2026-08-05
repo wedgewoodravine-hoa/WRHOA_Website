@@ -1,0 +1,466 @@
+"use client";
+
+import Link from "next/link";
+import {
+  type FormEvent,
+  type ReactNode,
+  useEffect,
+  useState,
+} from "react";
+import {
+  AuthExpiredError,
+  logoutSession,
+  decidePortalAccess,
+  enrichSessionUser,
+  loginToKnack,
+  requestKnackPasswordReset,
+  resolveExistingSession,
+  saveSession,
+  syncKnackRuntimeSession,
+  type AccessDecision,
+  type KnackSessionUser,
+} from "@/lib/knack-session";
+
+type AuthStatus<T> =
+  | { kind: "loading" }
+  | { kind: "login"; error?: string }
+  | { kind: "dues"; email?: string }
+  | { kind: "denied" }
+  | { kind: "ready"; email?: string; data: T }
+  | { kind: "content-error"; email?: string; message: string };
+
+type Props<T> = {
+  description?: string;
+  requireGoodStanding?: boolean;
+  allowedProfiles?: string[];
+  duesMessage?: string;
+  load: (token: string) => Promise<T>;
+  children: (data: T, user: { email?: string; onLogout: () => void }) => ReactNode;
+};
+
+export function HoaAuthPortal<T>({
+  description = "Enter the email and password for your HOA portal account.",
+  requireGoodStanding = false,
+  allowedProfiles,
+  duesMessage = "These materials are available after HOA dues are paid in full.",
+  load,
+  children,
+}: Props<T>) {
+  const [status, setStatus] = useState<AuthStatus<T>>({ kind: "loading" });
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    async function boot() {
+      const existing = await resolveExistingSession();
+      if (cancelled) return;
+      if (!existing) {
+        setStatus({ kind: "login" });
+        return;
+      }
+      await restoreSession(existing);
+    }
+
+    void boot();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- boot once on mount
+  }, []);
+
+  function decide(user: KnackSessionUser): AccessDecision {
+    return decidePortalAccess(user, { requireGoodStanding, allowedProfiles });
+  }
+
+  async function restoreSession(user: KnackSessionUser) {
+    const enriched = await enrichSessionUser(user);
+    const access = decide(enriched);
+
+    if (access === "dues") {
+      setStatus({ kind: "dues", email: enriched.email });
+      return;
+    }
+    if (access === "denied") {
+      await logoutSession();
+      setStatus({ kind: "denied" });
+      return;
+    }
+
+    try {
+      const data = await load(enriched.token);
+      saveSession(enriched);
+      await syncKnackRuntimeSession(enriched);
+      setStatus({ kind: "ready", email: enriched.email, data });
+    } catch (error) {
+      if (error instanceof AuthExpiredError) {
+        await logoutSession();
+        setStatus({
+          kind: "login",
+          error: "Your session has expired. Please sign in again.",
+        });
+        return;
+      }
+      setStatus({
+        kind: "content-error",
+        email: enriched.email,
+        message:
+          error instanceof Error ? error.message : "Unable to load materials.",
+      });
+    }
+  }
+
+  async function onSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setSubmitting(true);
+
+    try {
+      const user = await loginToKnack(email.trim(), password);
+      const withEmail: KnackSessionUser = {
+        ...user,
+        email: user.email || email.trim(),
+      };
+      const enriched = await enrichSessionUser(withEmail);
+      const access = decide(enriched);
+      saveSession(enriched);
+      await syncKnackRuntimeSession(enriched);
+      setPassword("");
+
+      if (access === "denied") {
+        await logoutSession();
+        setStatus({ kind: "denied" });
+        return;
+      }
+      if (access === "dues") {
+        setStatus({ kind: "dues", email: enriched.email });
+        return;
+      }
+
+      const data = await load(enriched.token);
+      setStatus({ kind: "ready", email: enriched.email, data });
+    } catch (error) {
+      await logoutSession();
+      setStatus({
+        kind: "login",
+        error:
+          error instanceof Error
+            ? error.message
+            : "Unable to sign in right now.",
+      });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  async function onLogout() {
+    await logoutSession();
+    setEmail("");
+    setPassword("");
+    setStatus({ kind: "login" });
+  }
+
+  if (status.kind === "loading") {
+    return (
+      <p className="text-sm text-forest-mid">
+        Checking for an existing HOA session…
+      </p>
+    );
+  }
+
+  if (status.kind === "login") {
+    return (
+      <LoginPanel
+        description={
+          requireGoodStanding
+            ? `${description} Access requires dues paid in full.`
+            : description
+        }
+        email={email}
+        password={password}
+        error={status.error}
+        submitting={submitting}
+        onEmailChange={setEmail}
+        onPasswordChange={setPassword}
+        onSubmit={onSubmit}
+      />
+    );
+  }
+
+  if (status.kind === "denied") {
+    return (
+      <GateMessage
+        title="Access restricted"
+        body="This area is available to registered Wedgewood homeowners only."
+        onLogout={onLogout}
+      />
+    );
+  }
+
+  if (status.kind === "dues") {
+    return (
+      <GateMessage
+        title="Dues must be current"
+        body={duesMessage}
+        email={status.email}
+        onLogout={onLogout}
+      >
+        <div className="mt-6 flex flex-wrap gap-3">
+          <Link href="/pay-hoa-fees" className="btn btn-brick">
+            Pay HOA fees
+          </Link>
+          <Link href="/contact/homeowner" className="btn btn-outline">
+            Contact support
+          </Link>
+        </div>
+      </GateMessage>
+    );
+  }
+
+  if (status.kind === "content-error") {
+    return (
+      <GateMessage
+        title="Unable to load materials"
+        body={status.message}
+        email={status.email}
+        onLogout={onLogout}
+      />
+    );
+  }
+
+  return (
+    <div>
+      <div className="mb-10 flex flex-wrap items-center justify-end gap-3 text-sm text-forest-mid">
+        {status.email ? <span>Signed in as {status.email}</span> : null}
+        <button
+          type="button"
+          onClick={onLogout}
+          className="text-xs uppercase tracking-[0.16em] text-brick transition hover:text-brick-deep"
+        >
+          Sign out
+        </button>
+      </div>
+      {children(status.data, { email: status.email, onLogout })}
+    </div>
+  );
+}
+
+function LoginPanel({
+  description,
+  email,
+  password,
+  error,
+  submitting,
+  onEmailChange,
+  onPasswordChange,
+  onSubmit,
+}: {
+  description: string;
+  email: string;
+  password: string;
+  error?: string;
+  submitting: boolean;
+  onEmailChange: (value: string) => void;
+  onPasswordChange: (value: string) => void;
+  onSubmit: (event: FormEvent<HTMLFormElement>) => void;
+}) {
+  const [forgotOpen, setForgotOpen] = useState(false);
+  const [forgotEmail, setForgotEmail] = useState(email);
+  const [forgotSubmitting, setForgotSubmitting] = useState(false);
+  const [forgotError, setForgotError] = useState<string | null>(null);
+  const [forgotNotice, setForgotNotice] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!forgotOpen) setForgotEmail(email);
+  }, [email, forgotOpen]);
+
+  async function onForgotSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    setForgotSubmitting(true);
+    setForgotError(null);
+    setForgotNotice(null);
+
+    try {
+      await requestKnackPasswordReset(forgotEmail);
+      setForgotNotice(
+        "If that email is on file, Knack will send password reset instructions shortly.",
+      );
+    } catch (err) {
+      setForgotError(
+        err instanceof Error
+          ? err.message
+          : "Unable to send a password reset email.",
+      );
+    } finally {
+      setForgotSubmitting(false);
+    }
+  }
+
+  return (
+    <div className="mx-auto max-w-md">
+      <p className="text-xs uppercase tracking-[0.22em] text-brick">
+        Homeowner login
+      </p>
+      <h2 className="font-display mt-2 text-3xl text-forest-deep">
+        Sign in to continue
+      </h2>
+      <div className="brick-rule mt-4" />
+      <p className="mt-5 text-sm leading-relaxed text-forest-mid">{description}</p>
+
+      {!forgotOpen ? (
+        <form onSubmit={onSubmit} className="mt-8 space-y-5">
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.16em] text-forest-mid">
+              Email
+            </span>
+            <input
+              type="email"
+              autoComplete="username"
+              required
+              value={email}
+              onChange={(event) => onEmailChange(event.target.value)}
+              className="mt-2 w-full border border-forest/20 bg-white/70 px-3 py-2.5 text-sm text-forest-deep outline-none transition focus:border-brick"
+            />
+          </label>
+          <label className="block">
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-xs uppercase tracking-[0.16em] text-forest-mid">
+                Password
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setForgotOpen(true);
+                  setForgotError(null);
+                  setForgotNotice(null);
+                }}
+                className="text-xs text-brick underline decoration-brick/35 underline-offset-2 hover:text-brick-deep"
+              >
+                Forgot password?
+              </button>
+            </div>
+            <input
+              type="password"
+              autoComplete="current-password"
+              required
+              value={password}
+              onChange={(event) => onPasswordChange(event.target.value)}
+              className="mt-2 w-full border border-forest/20 bg-white/70 px-3 py-2.5 text-sm text-forest-deep outline-none transition focus:border-brick"
+            />
+          </label>
+
+          {error ? (
+            <p className="border border-brick/30 bg-parchment/70 px-4 py-3 text-sm text-brick-deep">
+              {error}
+            </p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={submitting}
+            className="btn btn-brick w-full disabled:cursor-wait disabled:opacity-70"
+          >
+            {submitting ? "Signing in…" : "Sign in"}
+          </button>
+        </form>
+      ) : (
+        <form
+          onSubmit={(event) => void onForgotSubmit(event)}
+          className="mt-8 space-y-5"
+        >
+          <p className="text-sm leading-relaxed text-forest-mid">
+            Enter your HOA account email and we&apos;ll send Knack&apos;s
+            password reset link.
+          </p>
+          <label className="block">
+            <span className="text-xs uppercase tracking-[0.16em] text-forest-mid">
+              Email
+            </span>
+            <input
+              type="email"
+              autoComplete="username"
+              required
+              value={forgotEmail}
+              onChange={(event) => setForgotEmail(event.target.value)}
+              className="mt-2 w-full border border-forest/20 bg-white/70 px-3 py-2.5 text-sm text-forest-deep outline-none transition focus:border-brick"
+            />
+          </label>
+
+          {forgotError ? (
+            <p className="border border-brick/30 bg-parchment/70 px-4 py-3 text-sm text-brick-deep">
+              {forgotError}
+            </p>
+          ) : null}
+          {forgotNotice && !forgotError ? (
+            <p className="border border-forest/20 bg-white/60 px-4 py-3 text-sm text-forest-mid">
+              {forgotNotice}
+            </p>
+          ) : null}
+
+          <button
+            type="submit"
+            disabled={forgotSubmitting}
+            className="btn btn-brick w-full disabled:cursor-wait disabled:opacity-70"
+          >
+            {forgotSubmitting ? "Sending…" : "Send reset email"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setForgotOpen(false)}
+            className="btn btn-outline w-full"
+          >
+            Back to sign in
+          </button>
+        </form>
+      )}
+
+      <p className="mt-6 text-sm text-forest-mid">
+        Need help with your account?{" "}
+        <Link
+          href="/contact/homeowner"
+          className="text-brick underline decoration-brick/35 underline-offset-2 hover:text-brick-deep"
+        >
+          Contact the HOA
+        </Link>
+        .
+      </p>
+    </div>
+  );
+}
+
+function GateMessage({
+  title,
+  body,
+  email,
+  onLogout,
+  children,
+}: {
+  title: string;
+  body: string;
+  email?: string;
+  onLogout: () => void;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="mx-auto max-w-xl">
+      <p className="text-xs uppercase tracking-[0.22em] text-brick">
+        Access check
+      </p>
+      <h2 className="font-display mt-2 text-3xl text-forest-deep">{title}</h2>
+      <div className="brick-rule mt-4" />
+      <p className="mt-5 text-sm leading-relaxed text-forest-mid">{body}</p>
+      {children}
+      <div className="mt-8 flex flex-wrap items-center gap-4 text-sm text-forest-mid">
+        {email ? <span>Signed in as {email}</span> : null}
+        <button
+          type="button"
+          onClick={onLogout}
+          className="text-xs uppercase tracking-[0.16em] text-brick transition hover:text-brick-deep"
+        >
+          Sign out
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,36 +1,34 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Wedgewood Ravine HOA Website
 
-## Getting Started
+Professional redesign of [wedgewood.ca](https://www.wedgewood.ca/) — Next.js front end with existing Knack portal embeds.
 
-First, run the development server:
+## Design direction
+
+Upscale, nature-forward, lightly early-90s brochure aesthetic with a brick + forest palette. Community photography and documents were taken from the Weebly site export.
+
+## Develop
 
 ```bash
+npm install
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000).
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Knack
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+Embed definitions live in `src/lib/site.ts` (`embeds`). They were extracted from the Weebly export custom HTML blocks and iframes.
 
-## Learn More
+## Google Maps
 
-To learn more about Next.js, take a look at the following resources:
+Our Community and Contact use the Maps JavaScript API for a satellite (hybrid) view with business POIs hidden.
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+1. Create a key in [Google Cloud Console](https://console.cloud.google.com/) with **Maps JavaScript API** enabled.
+2. Copy `.env.example` to `.env.local` and set `NEXT_PUBLIC_GOOGLE_MAPS_API_KEY`.
+3. Restrict the key by HTTP referrer (`localhost:3000/*`, your production domain) when you deploy.
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+Without the key, those pages fall back to the free iframe embed (which still shows business labels).
 
-## Deploy on Vercel
+## Deploy notes
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+Weebly hosting will not serve this app. Deploy to Vercel, Netlify, or Cloudflare Pages, then point the `wedgewood.ca` DNS records at the new host when ready.

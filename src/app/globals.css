@@ -1,26 +1,499 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --forest-deep: #1a3324;
+  --forest: #274433;
+  --forest-mid: #3a5c45;
+  --moss: #6b8f71;
+  --brick: #8f3f2c;
+  --brick-deep: #6e2f21;
+  --clay: #c47a52;
+  --bark: #2c211b;
+  --paper: #eef1ea;
+  --mist: #dce3d8;
+  --parchment: #e7e0d2;
+  --gold: #b79a6a;
+  --ink: #1c1714;
+  --cream-text: #f4f0e8;
+
+  --background: var(--paper);
+  --foreground: var(--ink);
+  --font-display: var(--font-display);
+  --font-sans: var(--font-body);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
+  --color-forest-deep: var(--forest-deep);
+  --color-forest: var(--forest);
+  --color-forest-mid: var(--forest-mid);
+  --color-moss: var(--moss);
+  --color-brick: var(--brick);
+  --color-brick-deep: var(--brick-deep);
+  --color-clay: var(--clay);
+  --color-bark: var(--bark);
+  --color-paper: var(--paper);
+  --color-mist: var(--mist);
+  --color-parchment: var(--parchment);
+  --color-gold: var(--gold);
+  --color-ink: var(--ink);
+  --color-cream-text: var(--cream-text);
+  --font-sans: var(--font-body);
+  --font-display: var(--font-display);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+* {
+  box-sizing: border-box;
+}
+
+html {
+  scroll-behavior: smooth;
 }
 
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  margin: 0;
+  min-height: 100%;
+  color: var(--ink);
+  background:
+    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(107, 143, 113, 0.18), transparent 55%),
+    radial-gradient(ellipse 60% 40% at 90% 10%, rgba(143, 63, 44, 0.12), transparent 50%),
+    linear-gradient(180deg, #eef1ea 0%, #e4e9df 45%, #ebe4d6 100%);
+  font-family: var(--font-body), "Segoe UI", sans-serif;
+}
+
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 50;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+::selection {
+  background: rgba(143, 63, 44, 0.22);
+  color: var(--bark);
+}
+
+.font-display {
+  font-family: var(--font-display), Georgia, serif;
+}
+
+.site-shell {
+  position: relative;
+  z-index: 1;
+}
+
+.brick-rule {
+  height: 3px;
+  width: 4.5rem;
+  background: linear-gradient(90deg, var(--brick), var(--clay));
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(18px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ken-burns {
+  from {
+    transform: scale(1.05);
+  }
+  to {
+    transform: scale(1.12);
+  }
+}
+
+@keyframes soft-glow {
+  0%,
+  100% {
+    opacity: 0.35;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.9s ease-out both;
+}
+
+.animate-fade-up-delay-1 {
+  animation: fade-up 0.9s ease-out 0.15s both;
+}
+
+.animate-fade-up-delay-2 {
+  animation: fade-up 0.9s ease-out 0.3s both;
+}
+
+.animate-fade-up-delay-3 {
+  animation: fade-up 0.9s ease-out 0.45s both;
+}
+
+.hero-ken {
+  animation: ken-burns 22s ease-out forwards;
+}
+
+.hero-text-shadow {
+  text-shadow:
+    0 1px 3px rgba(28, 23, 20, 0.85),
+    0 0 18px rgba(28, 23, 20, 0.55),
+    0 10px 32px rgba(28, 23, 20, 0.65);
+}
+
+.hero-copy-glow {
+  position: relative;
+  isolation: isolate;
+}
+
+.hero-copy-glow::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: -1.5rem -2.5rem -2rem -2rem;
+  border-radius: 40%;
+  background: radial-gradient(
+    ellipse at 35% 55%,
+    rgba(28, 23, 20, 0.72) 0%,
+    rgba(28, 23, 20, 0.4) 42%,
+    transparent 72%
+  );
+  filter: blur(22px);
+  pointer-events: none;
+}
+
+.glow-orb {
+  animation: soft-glow 7s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fade-up,
+  .animate-fade-up-delay-1,
+  .animate-fade-up-delay-2,
+  .animate-fade-up-delay-3,
+  .hero-ken,
+  .glow-orb {
+    animation: none;
+  }
+}
+
+.prose-hoa p {
+  line-height: 1.7;
+  color: color-mix(in srgb, var(--ink) 88%, transparent);
+}
+
+.prose-hoa ul,
+.prose-hoa ol {
+  padding-left: 1.2rem;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.prose-hoa li {
+  line-height: 1.55;
+}
+
+.prose-hoa a:not(.btn) {
+  color: var(--brick-deep);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.875rem;
+  line-height: 1.25;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  text-decoration: none;
+  transition:
+    background-color 0.2s ease,
+    border-color 0.2s ease,
+    color 0.2s ease;
+}
+
+.btn-brick {
+  background: var(--brick);
+  color: #f4f0e8;
+}
+
+.btn-brick:hover {
+  background: var(--brick-deep);
+  color: #f4f0e8;
+}
+
+.btn-forest {
+  background: var(--forest);
+  color: #f4f0e8;
+}
+
+.btn-forest:hover {
+  background: var(--forest-deep);
+  color: #f4f0e8;
+}
+
+.btn-ghost {
+  border: 1px solid rgba(244, 240, 232, 0.55);
+  background: rgba(26, 51, 36, 0.35);
+  color: #f4f0e8;
+  backdrop-filter: blur(4px);
+}
+
+.btn-ghost:hover {
+  border-color: #f4f0e8;
+  background: rgba(26, 51, 36, 0.55);
+  color: #f4f0e8;
+}
+
+.btn-outline {
+  border: 1px solid color-mix(in srgb, var(--forest) 25%, transparent);
+  background: transparent;
+  color: var(--forest-deep);
+}
+
+.btn-outline:hover {
+  border-color: var(--brick);
+  color: var(--brick);
+}
+
+.section-band {
+  position: relative;
+  border-top: 1px solid color-mix(in srgb, var(--forest) 12%, transparent);
+}
+
+.section-band::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 4px;
+  height: 100%;
+  background: linear-gradient(180deg, var(--brick), var(--forest-mid));
+  opacity: 0.85;
+}
+
+.band-paper {
+  background: color-mix(in srgb, var(--paper) 88%, white);
+}
+
+.band-mist {
+  background:
+    linear-gradient(180deg, rgba(220, 227, 216, 0.72), rgba(220, 227, 216, 0.45)),
+    var(--mist);
+}
+
+.band-parchment {
+  background:
+    linear-gradient(180deg, rgba(231, 224, 210, 0.7), rgba(238, 241, 234, 0.85)),
+    var(--parchment);
+}
+
+.band-forest-soft {
+  background:
+    linear-gradient(180deg, rgba(39, 68, 51, 0.08), rgba(39, 68, 51, 0.04)),
+    #e5ebe3;
+}
+
+.band-forest-deep {
+  background: var(--forest-deep);
+  border-top-color: color-mix(in srgb, var(--forest-deep) 80%, black);
+}
+
+.band-forest-deep::before {
+  background: linear-gradient(180deg, var(--gold), var(--clay));
+}
+
+.community-map {
+  margin: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.community-map__mat {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+  aspect-ratio: 3 / 2;
+  background: #d7ddd4;
+  border: 1px solid color-mix(in srgb, var(--forest) 14%, transparent);
+}
+
+.community-map__frame {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #d7ddd4;
+}
+
+.community-map__caption {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1.25rem;
+  margin-top: 0.75rem;
+  font-size: 0.64rem;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: color-mix(in srgb, var(--forest-mid) 85%, transparent);
+}
+
+.community-map__caption a {
+  margin-left: auto;
+  color: var(--brick);
+  text-decoration: none;
+}
+
+@media (max-width: 640px) {
+  .community-map__mat {
+    aspect-ratio: 4 / 3;
+  }
+}
+
+.community-map__caption a:hover {
+  color: var(--brick-deep);
+}
+
+.knack-frame {
+  width: 100%;
+  border: 0;
+  background: white;
+  min-height: 640px;
+}
+
+.knack-shell {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--forest) 18%, transparent);
+  background: #fff;
+  box-shadow: 0 18px 50px rgba(28, 23, 20, 0.08);
+}
+
+/* Screen: hide printable membership sheet */
+.membership-print-sheet {
+  display: none;
+}
+
+@media print {
+  @page {
+    size: letter;
+    margin: 0.4in;
+  }
+
+  html,
+  body {
+    height: auto !important;
+    min-height: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    background: #fff !important;
+    color: #111 !important;
+    overflow: visible !important;
+  }
+
+  body::before {
+    display: none !important;
+  }
+
+  /* Portal mounts the sheet on body — hide everything else to avoid blank pages */
+  body > *:not(.membership-print-sheet) {
+    display: none !important;
+  }
+
+  .membership-print-sheet {
+    display: block !important;
+    width: 3.375in;
+    margin: 0;
+    padding: 0;
+    color: #111;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .membership-print-hint {
+    margin: 0 0 0.18in;
+    font-size: 7pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #666;
+  }
+
+  .membership-print-card {
+    width: 3.375in;
+    overflow: hidden;
+    border: 0.5pt dashed #888;
+    background: #fff;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .membership-print-art {
+    display: block;
+    width: 100%;
+    height: auto;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .membership-print-details {
+    padding: 0.1in 0.12in 0.11in;
+    border-top: 0.5pt solid #d0d0d0;
+    background: #f7f4ee;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .membership-print-number {
+    margin: 0;
+    font-family: var(--font-display), Georgia, serif;
+    font-size: 14pt;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    font-weight: 700;
+    color: #1a3324;
+  }
+
+  .membership-print-number--muted {
+    font-size: 8pt;
+    letter-spacing: 0.02em;
+    font-weight: 600;
+    color: #555;
+  }
+
+  .membership-print-names {
+    margin: 0.06in 0 0;
+    font-size: 7.5pt;
+    line-height: 1.25;
+    font-weight: 600;
+    color: #274433;
+  }
+
+  .membership-print-expiry {
+    margin: 0.06in 0 0;
+    font-size: 6.5pt;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #666;
+  }
 }
