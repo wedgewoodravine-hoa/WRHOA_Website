@@ -3,7 +3,8 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { navigation, site } from "@/lib/site";
 
 export function Header() {
@@ -11,7 +12,12 @@ export function Header() {
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
+  const [mounted, setMounted] = useState(false);
   const barRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -24,8 +30,9 @@ export function Header() {
     setOpen(false);
   }, [pathname]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!open) return;
+
     const previous = document.body.style.overflow;
     document.body.style.overflow = "hidden";
 
@@ -48,9 +55,61 @@ export function Header() {
 
   const solidBar = scrolled || open;
 
+  const mobileMenu =
+    open && mounted
+      ? createPortal(
+          <div
+            className="fixed inset-x-0 bottom-0 z-[60] overflow-y-auto overscroll-contain border-t border-forest/10 bg-paper lg:hidden"
+            style={{ top: menuTop }}
+            id="mobile-nav"
+          >
+            <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
+              {navigation.map((item) => (
+                <div key={item.href} className="border-b border-forest/8 py-2">
+                  <Link
+                    href={item.href}
+                    className={`block py-1 font-display text-xl ${
+                      isActive(item.href) ? "text-brick" : "text-forest-deep"
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                  {item.children ? (
+                    <div className="mt-1 flex flex-col gap-1 pb-2 pl-2">
+                      {item.children.map((child) =>
+                        child.external ? (
+                          <a
+                            key={child.label}
+                            href={child.href}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="py-1 text-sm text-forest-mid"
+                          >
+                            {child.label}
+                          </a>
+                        ) : (
+                          <Link
+                            key={child.label}
+                            href={child.href}
+                            className="py-1 text-sm text-forest-mid"
+                          >
+                            {child.label}
+                          </Link>
+                        ),
+                      )}
+                    </div>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          </div>,
+          document.body,
+        )
+      : null;
+
   return (
     <header
-      className={`sticky top-0 z-50 isolate border-b transition-colors duration-300 ${
+      className={`sticky top-0 z-50 border-b transition-colors duration-300 ${
         solidBar
           ? "border-forest/15 bg-paper/95 backdrop-blur-md"
           : "border-transparent bg-transparent"
@@ -134,8 +193,14 @@ export function Header() {
           type="button"
           aria-label={open ? "Close menu" : "Open menu"}
           aria-expanded={open}
+          aria-controls="mobile-nav"
           className="inline-flex h-10 w-10 items-center justify-center border border-forest/20 text-forest-deep lg:hidden"
-          onClick={() => setOpen((v) => !v)}
+          onClick={() => {
+            if (!open && barRef.current) {
+              setMenuTop(barRef.current.getBoundingClientRect().bottom);
+            }
+            setOpen((v) => !v);
+          }}
         >
           <span className="sr-only">Menu</span>
           <div className="flex w-4 flex-col gap-1.5">
@@ -150,52 +215,7 @@ export function Header() {
         </button>
       </div>
 
-      {open ? (
-        <div
-          className="fixed inset-x-0 bottom-0 z-50 overflow-y-auto overscroll-contain border-t border-forest/10 bg-paper lg:hidden"
-          style={{ top: menuTop }}
-        >
-          <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
-            {navigation.map((item) => (
-              <div key={item.href} className="border-b border-forest/8 py-2">
-                <Link
-                  href={item.href}
-                  className={`block py-1 font-display text-xl ${
-                    isActive(item.href) ? "text-brick" : "text-forest-deep"
-                  }`}
-                >
-                  {item.label}
-                </Link>
-                {item.children ? (
-                  <div className="mt-1 flex flex-col gap-1 pb-2 pl-2">
-                    {item.children.map((child) =>
-                      child.external ? (
-                        <a
-                          key={child.label}
-                          href={child.href}
-                          target="_blank"
-                          rel="noreferrer"
-                          className="py-1 text-sm text-forest-mid"
-                        >
-                          {child.label}
-                        </a>
-                      ) : (
-                        <Link
-                          key={child.label}
-                          href={child.href}
-                          className="py-1 text-sm text-forest-mid"
-                        >
-                          {child.label}
-                        </Link>
-                      ),
-                    )}
-                  </div>
-                ) : null}
-              </div>
-            ))}
-          </div>
-        </div>
-      ) : null}
+      {mobileMenu}
     </header>
   );
 }
