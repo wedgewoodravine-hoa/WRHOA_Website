@@ -16,7 +16,18 @@ export default function NeedANewRoofPage() {
         description="Roof materials are part of what keeps Wedgewood Ravine’s architectural character intact."
       />
       <ContentSection band={0} narrow className="prose-hoa">
-        <h2 className="font-display text-3xl text-forest-deep">Roof Materials</h2>
+        <div className="flex flex-wrap gap-3">
+          <Link href="/design-guidelines" className="btn btn-forest">
+            View All Design Guidelines
+          </Link>
+          <Link href="/design-guidelines-variance" className="btn btn-outline">
+            Apply for a Variance
+          </Link>
+        </div>
+
+        <h2 className="font-display mt-12 text-3xl text-forest-deep">
+          Roof Materials
+        </h2>
         <div className="brick-rule mt-4" />
         <div className="mt-6 space-y-4">
           <p>
@@ -65,15 +76,6 @@ export default function NeedANewRoofPage() {
             </Link>
             .
           </p>
-        </div>
-
-        <div className="mt-10 flex flex-wrap gap-3">
-          <Link href="/design-guidelines" className="btn btn-forest">
-            View All Design Guidelines
-          </Link>
-          <Link href="/design-guidelines-variance" className="btn btn-outline">
-            Apply for a Variance
-          </Link>
         </div>
       </ContentSection>
     </>
