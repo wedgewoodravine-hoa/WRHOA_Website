@@ -37,6 +37,12 @@ yarn-error.log*
 # vercel
 .vercel
 
+# Knack editor scratch / backups (local only)
+Knack_CSS
+Knack_CSS.backup
+Knack_JS
+Knack_JS.backup
+
 # typescript
 *.tsbuildinfo
 next-env.d.ts
