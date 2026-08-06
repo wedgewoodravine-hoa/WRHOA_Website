@@ -442,6 +442,12 @@ function normalizeNewsletter(record: NewsletterRecord): HoaNewsletter {
   };
 }
 
+/** Prefer these URLs over Knack when City of Edmonton pages move. */
+const AMENITY_LINK_OVERRIDES: Record<string, string> = {
+  "Callingwood Arena":
+    "https://www.edmonton.ca/activities_parks_recreation/arenas",
+};
+
 function normalizeAmenity(record: AmenityRecord): CommunityAmenity {
   const image =
     record.field_321_raw && typeof record.field_321_raw === "object"
@@ -451,21 +457,23 @@ function normalizeAmenity(record: AmenityRecord): CommunityAmenity {
     record.field_480_raw && typeof record.field_480_raw === "object"
       ? record.field_480_raw
       : null;
+  const name = record.field_319_raw?.trim() || "Untitled";
+  const overrideUrl = AMENITY_LINK_OVERRIDES[name];
+  const resolvedUrl = overrideUrl || link?.url;
 
   return {
     id: record.id,
-    name: record.field_319_raw?.trim() || "Untitled",
+    name,
     description: stripHtml(record.field_320_raw || ""),
     category: record.field_479_raw?.trim() || "Other",
     imageUrl: image?.url,
     thumbUrl: image?.thumb_url || image?.url,
-    link:
-      link?.url
-        ? {
-            url: link.url,
-            label: link.label?.trim() || "Learn more",
-          }
-        : undefined,
+    link: resolvedUrl
+      ? {
+          url: resolvedUrl,
+          label: link?.label?.trim() || name || "Learn more",
+        }
+      : undefined,
   };
 }
 

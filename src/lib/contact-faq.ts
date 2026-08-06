@@ -121,6 +121,19 @@ export const contactFaq: ContactFaqItem[] = [
     ],
   },
   {
+    question: "Can I install solar panels?",
+    answer:
+      "The HOA does not restrict roof-mounted solar panels, and they are not called out in the Design Guidelines. Panels should be affixed to the roof of your home and installed according to City of Edmonton and Government of Alberta permits and regulations—your contractor will normally handle those requirements. Separate HOA approval is not required for the solar installation itself. If your project also changes roofing materials (for example, replacing shakes under the array), that roofing work still needs a Design Guidelines Variance.",
+    links: [
+      { label: "Design Guidelines", href: "/design-guidelines" },
+      {
+        label: "Design Guidelines Variance",
+        href: "/design-guidelines-variance",
+      },
+      { label: "Need a New Roof?", href: "/need-a-new-roof" },
+    ],
+  },
+  {
     question: "Common areas, boulevards, fences, or the fountain?",
     answer:
       "The HOA maintains (paint only) fences, park areas, boulevards, facilities, and common walkways, and operates the fountain. Day-to-day management of parks, tennis courts, and related amenities has been assigned to the Community League—contact them for those issues.",
