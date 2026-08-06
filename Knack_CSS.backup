@@ -1,0 +1,58 @@
+/* Hide Email list */
+#kn-input-field_299 {
+  position: absolute;
+  visibility: collapse;
+}
+
+/* Hover Colour*/
+.kn-navigation-bar a:hover { 
+   background-color: #ffffff; 
+   color: #3E6D45 !important; 
+}
+
+.is-primary {
+background-color: #3E6D45  !important;
+color: #FFFFFF ;
+}
+
+/* Header */
+#knack-body #kn-app-header{
+
+  background-color: #3E6D45;
+
+}
+
+header .kn-container {
+
+   align-items: center;
+   display: flex;
+   justify-content: space-between;
+}
+
+.kn-content .kn-navigation-bar nav {
+
+   padding-left: 20px;
+}
+
+#kn-app-menu nav.tabs li.is-active a {
+
+   color: #FFF !important;
+   background-color: #142316 !important;
+}
+
+#kn-app-menu nav.tabs li a {
+
+   background-color: transparent;
+   border-radius: 0;
+   padding: 35px 30px;
+   transition: all 0.5s;
+}
+
+#kn-app-menu nav.tabs li.is-active a {
+
+   color: #142316 !important;
+}
+
+.kn-crumbtrail {
+visibility:hidden;
+}

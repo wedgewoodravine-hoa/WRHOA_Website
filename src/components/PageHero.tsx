@@ -6,13 +6,13 @@ type Props = {
 
 export function PageHero({ title, description, eyebrow }: Props) {
   return (
-    <section className="relative overflow-hidden border-b border-forest/10">
+    <section className="relative z-0 isolate overflow-hidden border-b border-forest/10">
       <div
-        className="absolute inset-0 bg-cover bg-center brightness-[1.06] contrast-[1.05]"
+        className="absolute inset-0 -z-10 bg-cover bg-center brightness-[1.06] contrast-[1.05]"
         style={{ backgroundImage: "url('/images/FountainNEW.jpg')" }}
       />
-      <div className="absolute inset-0 bg-gradient-to-r from-forest-deep/78 via-forest/55 to-bark/35" />
-      <div className="glow-orb absolute -right-16 top-0 h-56 w-56 rounded-full bg-brick/30 blur-3xl" />
+      <div className="absolute inset-0 -z-10 bg-gradient-to-r from-forest-deep/78 via-forest/55 to-bark/35" />
+      <div className="glow-orb absolute -right-16 top-0 -z-10 h-56 w-56 rounded-full bg-brick/30 blur-3xl" />
       <div className="relative mx-auto max-w-6xl px-4 py-12 sm:px-6 sm:py-14 lg:px-8">
         {eyebrow ? (
           <p className="hero-text-shadow animate-fade-up text-xs uppercase tracking-[0.24em] text-gold">

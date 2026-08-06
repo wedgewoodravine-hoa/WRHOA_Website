@@ -3,13 +3,15 @@
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { navigation, site } from "@/lib/site";
 
 export function Header() {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
   const [scrolled, setScrolled] = useState(false);
+  const [menuTop, setMenuTop] = useState(0);
+  const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 12);
@@ -22,18 +24,42 @@ export function Header() {
     setOpen(false);
   }, [pathname]);
 
+  useEffect(() => {
+    if (!open) return;
+    const previous = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+
+    const syncMenuTop = () => {
+      if (barRef.current) {
+        setMenuTop(barRef.current.getBoundingClientRect().bottom);
+      }
+    };
+    syncMenuTop();
+    window.addEventListener("resize", syncMenuTop);
+
+    return () => {
+      document.body.style.overflow = previous;
+      window.removeEventListener("resize", syncMenuTop);
+    };
+  }, [open]);
+
   const isActive = (href: string) =>
     href === "/" ? pathname === "/" : pathname.startsWith(href);
 
+  const solidBar = scrolled || open;
+
   return (
     <header
-      className={`sticky top-0 z-40 border-b transition-colors duration-300 ${
-        scrolled
-          ? "border-forest/15 bg-paper/92 backdrop-blur-md"
+      className={`sticky top-0 z-50 isolate border-b transition-colors duration-300 ${
+        solidBar
+          ? "border-forest/15 bg-paper/95 backdrop-blur-md"
           : "border-transparent bg-transparent"
       }`}
     >
-      <div className="mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 sm:py-4 lg:px-8">
+      <div
+        ref={barRef}
+        className="relative z-10 mx-auto flex max-w-6xl items-center justify-between gap-4 px-4 py-3.5 sm:px-6 sm:py-4 lg:px-8"
+      >
         <Link href="/" className="group flex items-center gap-3 sm:gap-4">
           <Image
             src="/images/logo.png"
@@ -125,8 +151,11 @@ export function Header() {
       </div>
 
       {open ? (
-        <div className="border-t border-forest/10 bg-paper/98 lg:hidden">
-          <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 sm:px-6">
+        <div
+          className="fixed inset-x-0 bottom-0 z-50 overflow-y-auto overscroll-contain border-t border-forest/10 bg-paper lg:hidden"
+          style={{ top: menuTop }}
+        >
+          <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
             {navigation.map((item) => (
               <div key={item.href} className="border-b border-forest/8 py-2">
                 <Link

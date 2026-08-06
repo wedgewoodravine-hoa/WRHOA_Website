@@ -25,8 +25,8 @@ export default async function HomePage() {
 
   return (
     <>
-      <section className="relative min-h-[70svh] overflow-hidden md:min-h-[75svh]">
-        <div className="absolute inset-0">
+      <section className="relative z-0 isolate min-h-[70svh] overflow-hidden md:min-h-[75svh]">
+        <div className="absolute inset-0 -z-10">
           <Image
             src="/images/FountainNEW.jpg"
             alt="Wedgewood Ravine fountain with brick pillars and evergreen backdrop"

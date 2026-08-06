@@ -1,0 +1,48 @@
+/* This Code Checks All the Boxes in the Checkbox We Made For That Form Only */
+$(document).on('knack-view-render.view_532', function(event, view) { 
+  $('#view_532 .conn_inputs input').each(function() {
+    $('#view_532 .conn_inputs input').prop('checked', true); 
+  });
+});
+
+document.getElementById("Click Here to Verify Account Information").click();
+
+/* Add Favicon icon. */
+(function() {
+var link = document.querySelector("link[rel*='icon']")|| document.createElement('link');
+link.type = 'image/x-icon';
+link.rel = 'shortcut icon';
+link.href = 'https://www.wedgewood.ca/public/uploads/images/favicon32x321/1619371789-275w_favicon32x321.png'; // << paste the URL of your picture in there
+document.getElementsByTagName('head')[0].appendChild(link);
+})();
+
+/*PDF ISSUE*/
+
+var links = document.getElementsByClassName("kn-view-asset");
+for (var i = 0; i < links.length; i++) {
+    links[i].setAttribute("target", "_blank");
+}
+
+/*******************************************/
+/*** Disable Breadcrumb Navigation Links ***/
+/*******************************************/
+function disableBreadCrumbsNonAdmin() {
+  if (!Knack.user.session) {
+    $(".kn-crumbtrail a").each(function () {
+      $(this).replaceWith($(this).text());
+    });
+  }
+}
+
+//Page to disable crumbtrail
+$(document).on("knack-scene-render.scene_272", function () {
+  disableBreadCrumbsNonAdmin();
+});
+
+//Scroll bar eliminate//
+window.addEventListener('load', function() {
+	let message = { height: document.body.scrollHeight, width: document.body.scrollWidth };	
+
+	// window.top refers to parent window
+	window.top.postMessage(message, "*");
+});
