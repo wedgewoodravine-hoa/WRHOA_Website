@@ -13,6 +13,7 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuTop, setMenuTop] = useState(0);
   const [mounted, setMounted] = useState(false);
+  const [expandedHref, setExpandedHref] = useState<string | null>(null);
   const barRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -28,7 +29,12 @@ export function Header() {
 
   useEffect(() => {
     setOpen(false);
+    setExpandedHref(null);
   }, [pathname]);
+
+  useEffect(() => {
+    if (!open) setExpandedHref(null);
+  }, [open]);
 
   useLayoutEffect(() => {
     if (!open) return;
@@ -64,43 +70,78 @@ export function Header() {
             id="mobile-nav"
           >
             <div className="mx-auto flex max-w-6xl flex-col gap-1 px-4 py-4 pb-[max(1.5rem,env(safe-area-inset-bottom))] sm:px-6">
-              {navigation.map((item) => (
-                <div key={item.href} className="border-b border-forest/8 py-2">
-                  <Link
-                    href={item.href}
-                    className={`block py-1 font-display text-xl ${
-                      isActive(item.href) ? "text-brick" : "text-forest-deep"
-                    }`}
-                  >
-                    {item.label}
-                  </Link>
-                  {item.children ? (
-                    <div className="mt-1 flex flex-col gap-1 pb-2 pl-2">
-                      {item.children.map((child) =>
-                        child.external ? (
-                          <a
-                            key={child.label}
-                            href={child.href}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="py-1 text-sm text-forest-mid"
-                          >
-                            {child.label}
-                          </a>
-                        ) : (
-                          <Link
-                            key={child.label}
-                            href={child.href}
-                            className="py-1 text-sm text-forest-mid"
-                          >
-                            {child.label}
-                          </Link>
-                        ),
-                      )}
-                    </div>
-                  ) : null}
-                </div>
-              ))}
+              {navigation.map((item) => {
+                const hasChildren = Boolean(item.children?.length);
+                const isExpanded = expandedHref === item.href;
+                const childLinks = item.children
+                  ? item.children.some((child) => child.href === item.href)
+                    ? item.children
+                    : [{ label: item.label, href: item.href }, ...item.children]
+                  : [];
+
+                return (
+                  <div key={item.href} className="border-b border-forest/8 py-2">
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        aria-expanded={isExpanded}
+                        className={`flex w-full items-center justify-between gap-3 py-1 text-left font-display text-xl ${
+                          isActive(item.href) ? "text-brick" : "text-forest-deep"
+                        }`}
+                        onClick={() =>
+                          setExpandedHref((current) =>
+                            current === item.href ? null : item.href,
+                          )
+                        }
+                      >
+                        <span>{item.label}</span>
+                        <span
+                          aria-hidden
+                          className={`text-base leading-none text-forest-mid transition-transform duration-200 ${
+                            isExpanded ? "rotate-180" : ""
+                          }`}
+                        >
+                          ▾
+                        </span>
+                      </button>
+                    ) : (
+                      <Link
+                        href={item.href}
+                        className={`block py-1 font-display text-xl ${
+                          isActive(item.href) ? "text-brick" : "text-forest-deep"
+                        }`}
+                      >
+                        {item.label}
+                      </Link>
+                    )}
+                    {hasChildren && isExpanded ? (
+                      <div className="mt-1 flex flex-col gap-1 pb-2 pl-2">
+                        {childLinks.map((child) =>
+                          child.external ? (
+                            <a
+                              key={child.label}
+                              href={child.href}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="py-1.5 text-sm text-forest-mid"
+                            >
+                              {child.label}
+                            </a>
+                          ) : (
+                            <Link
+                              key={child.label}
+                              href={child.href}
+                              className="py-1.5 text-sm text-forest-mid"
+                            >
+                              {child.label}
+                            </Link>
+                          ),
+                        )}
+                      </div>
+                    ) : null}
+                  </div>
+                );
+              })}
             </div>
           </div>,
           document.body,
