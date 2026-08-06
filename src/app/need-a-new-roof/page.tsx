@@ -43,6 +43,30 @@ export default function NeedANewRoofPage() {
             1&apos;-6&quot;, and on lower levels are to be 2&apos;-0&quot;.
           </p>
         </div>
+
+        <h2 className="font-display mt-14 text-3xl text-forest-deep">
+          Solar Panels
+        </h2>
+        <div className="brick-rule mt-4" />
+        <div className="mt-6 space-y-4">
+          <p>
+            The HOA does not restrict roof-mounted solar panels. They are not
+            called out in the Design Guidelines, and separate HOA approval is
+            not required for the solar installation itself. Panels should be
+            affixed to the roof of your home and installed according to City of
+            Edmonton and Government of Alberta permits and regulations—your
+            contractor will normally handle those requirements.
+          </p>
+          <p>
+            If your solar project also changes roofing materials (for example,
+            replacing shakes under the array), that roofing work still needs a{" "}
+            <Link href="/design-guidelines-variance">
+              Design Guidelines Variance
+            </Link>
+            .
+          </p>
+        </div>
+
         <div className="mt-10 flex flex-wrap gap-3">
           <Link href="/design-guidelines" className="btn btn-forest">
             View All Design Guidelines
