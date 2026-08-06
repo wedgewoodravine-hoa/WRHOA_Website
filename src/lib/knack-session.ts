@@ -38,6 +38,8 @@ const SESSION_KEY = "wrhoa-knack-session";
 const REFRESH_TOKEN_KEY = `refreshToken-${KNACK_APP_ID}`;
 const REFRESH_USER_KEY = `refreshToken-user-${KNACK_APP_ID}`;
 const REMEMBER_COOKIE_KEY = `${KNACK_APP_ID}-remember-me`;
+/** Set on intentional sign-out so we do not rehydrate from a lingering Knack runtime. */
+const LOGOUT_FLAG_KEY = "wrhoa-knack-logged-out";
 
 export type CommunityLink = {
   url: string;
@@ -335,6 +337,8 @@ export async function loginToKnack(
   email: string,
   password: string,
 ): Promise<KnackSessionUser> {
+  clearLogoutFlag();
+
   const res = await fetch(
     `https://api.knack.com/v1/applications/${KNACK_APP_ID}/session`,
     {
@@ -412,6 +416,11 @@ export async function requestKnackPasswordReset(email: string): Promise<void> {
  */
 export async function resolveExistingSession(): Promise<KnackSessionUser | null> {
   if (typeof window === "undefined") return null;
+
+  // After an intentional Sign out, do not rebuild a session from Knack embeds.
+  if (hasLogoutFlag()) {
+    return null;
+  }
 
   const saved = loadSession();
   if (saved?.token && hasAccessMetadata(saved)) {
@@ -663,13 +672,34 @@ export async function updateLeagueHouseholdMembers(
 }
 
 /**
+ * Homeowner account details (scene_76 / view_137) for profile & login settings.
+ */
+export async function fetchHomeownerAccount(
+  token: string,
+): Promise<HomeownerAccount> {
+  const accountRecords = await fetchAuthenticatedRecords<HomeownerRecord>(
+    token,
+    ACCOUNT_SCENE,
+    ACCOUNT_DETAILS_VIEW,
+    { rows_per_page: "5" },
+  );
+
+  const record = accountRecords[0];
+  if (!record) {
+    throw new Error("No homeowner account record was found for this login.");
+  }
+
+  return normalizeHomeownerAccount(record);
+}
+
+/**
  * Homeowner dues portal (scene_3) — current/paid dues and linked properties.
  * PayPal checkout remains on the Knack payment scene via dist_25.
  */
 export async function fetchPayHoaFeesContent(
   token: string,
 ): Promise<PayHoaFeesContent> {
-  const [properties, current, paid, accountRecords] = await Promise.all([
+  const [properties, current, paid, account] = await Promise.all([
     fetchAuthenticatedRecords<DuesPropertyRecord>(
       token,
       DUES_SCENE,
@@ -682,12 +712,7 @@ export async function fetchPayHoaFeesContent(
     fetchAuthenticatedRecords<DuesRecord>(token, DUES_SCENE, PAID_DUES_VIEW, {
       rows_per_page: "50",
     }),
-    fetchAuthenticatedRecords<HomeownerRecord>(
-      token,
-      ACCOUNT_SCENE,
-      ACCOUNT_DETAILS_VIEW,
-      { rows_per_page: "5" },
-    ),
+    fetchHomeownerAccount(token).catch(() => undefined),
   ]);
 
   return {
@@ -719,9 +744,7 @@ export async function fetchPayHoaFeesContent(
       chequeAmountLabel: formatMoney(record.field_75_raw),
       chequeDateLabel: parseKnackDate(record.field_78_raw)?.label,
     })),
-    account: accountRecords[0]
-      ? normalizeHomeownerAccount(accountRecords[0])
-      : undefined,
+    account,
     paymentDistributionKey: PAY_HOA_DISTRIBUTION,
   };
 }
@@ -826,6 +849,8 @@ export async function updateHomeownerCredentials(
 export function saveSession(user: KnackSessionUser) {
   if (typeof window === "undefined") return;
 
+  clearLogoutFlag();
+
   const payload = {
     id: user.id,
     token: user.token,
@@ -864,15 +889,51 @@ export function loadSession(): KnackSessionUser | null {
 
 export function clearSession() {
   if (typeof window === "undefined") return;
-  clearLocalSessionArtifacts();
-  void clearKnackRuntimeSession();
+  markLoggedOut();
+  // Tear down Knack while tokens may still be present, then clear local storage.
+  void clearKnackRuntimeSession({ ensureLoaded: true }).finally(() => {
+    clearLocalSessionArtifacts();
+    clearKnackMounts();
+  });
 }
 
-/** Full sign-out: clear our session and Knack embed/runtime session. */
+/**
+ * Full sign-out: tell Knack to log out (loading the runtime if needed), then
+ * clear our local session artifacts so embeds cannot rehydrate the login.
+ */
 export async function logoutSession() {
   if (typeof window === "undefined") return;
+  markLoggedOut();
+  // Logout Knack first while refresh/remember tokens still exist so the runtime
+  // can identify and destroy the active user. REST-gated pages often never
+  // load Knack; ensureLoaded fixes Sign out leaving Knack still authenticated.
+  await clearKnackRuntimeSession({ ensureLoaded: true });
   clearLocalSessionArtifacts();
-  await clearKnackRuntimeSession();
+  clearKnackMounts();
+}
+
+function markLoggedOut() {
+  try {
+    sessionStorage.setItem(LOGOUT_FLAG_KEY, "1");
+  } catch {
+    // ignore
+  }
+}
+
+function clearLogoutFlag() {
+  try {
+    sessionStorage.removeItem(LOGOUT_FLAG_KEY);
+  } catch {
+    // ignore
+  }
+}
+
+function hasLogoutFlag() {
+  try {
+    return sessionStorage.getItem(LOGOUT_FLAG_KEY) === "1";
+  } catch {
+    return false;
+  }
 }
 
 function clearLocalSessionArtifacts() {
@@ -939,8 +1000,16 @@ async function applySessionToKnackRuntime(user: KnackSessionUser) {
   }
 }
 
-async function clearKnackRuntimeSession() {
+async function clearKnackRuntimeSession(options?: { ensureLoaded?: boolean }) {
   if (typeof window === "undefined") return;
+
+  if (options?.ensureLoaded && !window.Knack) {
+    try {
+      await ensureKnackLoader();
+    } catch {
+      // Continue with local cleanup even if the loader fails.
+    }
+  }
 
   if (window.Knack) {
     try {
@@ -967,16 +1036,13 @@ async function clearKnackRuntimeSession() {
     }
   }
 
-  // Reset any mounted checkout embeds so they cannot keep a stale identity.
-  document
-    .querySelectorAll<HTMLElement>('[id^="knack-"]')
-    .forEach((node) => {
-      if (node.id === `knack-${SESSION_PROBE_DIST}`) {
-        node.replaceChildren();
-        return;
-      }
-      node.replaceChildren();
-    });
+  clearKnackMounts();
+}
+
+function clearKnackMounts() {
+  document.querySelectorAll<HTMLElement>('[id^="knack-"]').forEach((node) => {
+    node.replaceChildren();
+  });
 }
 
 function destroyKnackUser() {

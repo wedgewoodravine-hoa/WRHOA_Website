@@ -49,6 +49,7 @@ export const navigation: NavItem[] = [
     href: "/my-hoa",
     children: [
       { label: "Pay HOA Fees", href: "/pay-hoa-fees" },
+      { label: "Account Settings", href: "/account-settings" },
       { label: "Design Guidelines", href: "/design-guidelines" },
       { label: "Need a New Roof?", href: "/need-a-new-roof" },
       { label: "Design Guidelines Variance", href: "/design-guidelines-variance" },

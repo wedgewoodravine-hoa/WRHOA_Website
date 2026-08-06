@@ -138,6 +138,7 @@ export const contactFaq: ContactFaqItem[] = [
     answer:
       "Use the forgot-password link on the Pay HOA Fees / members sign-in screen and check junk mail for the reset email. If your address does not appear during signup or you still cannot get in, contact the HOA with your property address and the email you use for the account.",
     links: [
+      { label: "Account Settings", href: "/account-settings" },
       { label: "Pay HOA Fees / sign in", href: "/pay-hoa-fees" },
       { label: "Contact the HOA", href: "/contact/homeowner" },
     ],

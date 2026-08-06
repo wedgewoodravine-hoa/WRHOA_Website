@@ -10,6 +10,7 @@ export const metadata: Metadata = {
 
 const links = [
   { href: "/pay-hoa-fees", label: "Pay HOA Fees" },
+  { href: "/account-settings", label: "Account Settings" },
   { href: "/design-guidelines", label: "Design Guidelines" },
   { href: "/policies-financials-bylaws", label: "Policies, Financials & Bylaws" },
   { href: "/townhall-agm", label: "Town Hall & AGM" },
