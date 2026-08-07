@@ -14,19 +14,16 @@ export function ParkDevelopmentSection({ updates, error }: Props) {
   return (
     <div className="grid gap-12 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.7fr)] lg:gap-14">
       <div>
-        <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-          <div>
-            <p className="text-xs uppercase tracking-[0.22em] text-brick">
-              Updates
-            </p>
-            <h2 className="font-display mt-2 text-3xl text-forest-deep">
-              Development news
-            </h2>
-            <div className="brick-rule mt-4" />
-          </div>
-          <p className="max-w-md text-sm text-forest-mid">
-            Notices and announcements about the school surplus site and proposed
-            townhouse development.
+        <div className="mb-8">
+          <p className="text-xs uppercase tracking-[0.22em] text-brick">
+            Updates
+          </p>
+          <h2 className="font-display mt-2 text-3xl text-forest-deep sm:text-4xl">
+            Development news
+          </h2>
+          <div className="brick-rule mt-4" />
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-forest-mid">
+            Notices and announcements about the townhouse development.
           </p>
         </div>
 

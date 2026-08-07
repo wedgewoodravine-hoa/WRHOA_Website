@@ -26,7 +26,7 @@ export default async function Page() {
       <PageHero
         eyebrow="Our Community"
         title="Surplus Site Development"
-        description="News, updates, and links about the proposed townhouse development on the school surplus site park area."
+        description="News, updates, and links about the townhouse development on the school surplus site park area."
       />
       <ContentSection band={0}>
         <ParkDevelopmentSection updates={updates} error={error} />
