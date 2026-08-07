@@ -10,6 +10,9 @@ const NEWS_LINK_VIEW = "view_792";
 const CALENDAR_SCENE = "scene_401";
 const CALENDAR_VIEW = "view_722";
 
+const PARK_DEVELOPMENT_SCENE = "scene_450";
+const PARK_DEVELOPMENT_VIEW = "view_837";
+
 const NEWS_LIMIT = 8;
 const NEWSLETTER_LIMIT = 5;
 const UPCOMING_LIMIT = 6;
@@ -149,6 +152,15 @@ type NewsletterRecord = {
   field_567_raw?: KnackFileRaw | string | null;
 };
 
+type ParkDevelopmentRecord = {
+  id: string;
+  field_311_raw?: string;
+  field_131_raw?: string;
+  field_252_raw?: KnackDateRaw | string | null;
+  field_312_raw?: KnackLinkRaw | string | null;
+  field_567_raw?: KnackFileRaw | string | null;
+};
+
 type BoardMemberRecord = {
   id: string;
   field_406_raw?: string;
@@ -278,6 +290,15 @@ export function groupGuidelinesByCategory(items: DesignGuideline[]) {
       ),
     }))
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
+}
+
+export async function fetchParkDevelopmentUpdates(): Promise<HoaNewsItem[]> {
+  const data = await knackGet<KnackRecordsResponse<ParkDevelopmentRecord>>(
+    `${PARK_DEVELOPMENT_SCENE}/views/${PARK_DEVELOPMENT_VIEW}/records`,
+    { rows_per_page: "50" },
+  );
+
+  return (data.records ?? []).map(normalizeParkDevelopmentItem);
 }
 
 export async function fetchHomeUpdates(): Promise<HomeUpdates> {
@@ -438,6 +459,32 @@ function normalizeNewsletter(record: NewsletterRecord): HoaNewsletter {
   return {
     id: record.id,
     title: record.field_311_raw?.trim() || "Newsletter",
+    file: parseKnackFile(record.field_567_raw),
+  };
+}
+
+function normalizeParkDevelopmentItem(
+  record: ParkDevelopmentRecord,
+): HoaNewsItem {
+  const date = parseKnackDate(record.field_252_raw);
+  const linkRaw =
+    record.field_312_raw && typeof record.field_312_raw === "object"
+      ? record.field_312_raw
+      : null;
+
+  return {
+    id: record.id,
+    title: record.field_311_raw?.trim() || "Untitled update",
+    category: "Park Development",
+    dateISO: date?.iso,
+    dateLabel: date?.label,
+    message: cleanMultilineText(record.field_131_raw || ""),
+    link: linkRaw?.url
+      ? {
+          url: linkRaw.url,
+          label: linkRaw.label?.trim() || "Open link",
+        }
+      : undefined,
     file: parseKnackFile(record.field_567_raw),
   };
 }

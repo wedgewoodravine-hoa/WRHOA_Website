@@ -39,7 +39,7 @@ export const navigation: NavItem[] = [
       { label: "Wedgewood Ravine", href: "/our-community" },
       { label: "Home Buyers & Sellers", href: "/home-buyers-sellers" },
       { label: "Who Does What", href: "/who-does-what" },
-      { label: "School Surplus Site", href: "/school-surplus-site" },
+      { label: "Surplus Site Development", href: "/surplus-site-development" },
       { label: "My League Membership Number", href: "/my-league-membership-number" },
       { label: "Community League", href: site.communityLeagueUrl, external: true },
       { label: "CL Admin Login", href: "/cl-admin-login" },
@@ -128,7 +128,6 @@ export const embeds = {
   events: knackScript("dist_3"),
   newsletters: knackScript("dist_19"),
   hoaNews: knackScript("dist_21"),
-  schoolSurplusSite: knackScript("dist_37"),
   boardMeetingsPrivate: knackIframe("board-member-meetings/", 1200),
 } as const;
 

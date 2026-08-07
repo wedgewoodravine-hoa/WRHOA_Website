@@ -16,7 +16,9 @@ export function ExpandableText({ text, className = "" }: Props) {
 
   return (
     <div className={className}>
-      <p className="text-sm leading-relaxed text-forest-mid">{linkify(display)}</p>
+      <p className="whitespace-pre-line text-sm leading-relaxed text-forest-mid">
+        {linkify(display)}
+      </p>
       {needsExpand ? (
         <button
           type="button"
