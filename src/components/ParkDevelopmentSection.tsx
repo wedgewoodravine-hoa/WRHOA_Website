@@ -10,6 +10,7 @@ type Props = {
 
 export function ParkDevelopmentSection({ updates, error }: Props) {
   const links = uniqueLinks(updates);
+  const files = uniqueFiles(updates);
 
   return (
     <div className="grid gap-12 lg:grid-cols-[minmax(0,1.45fr)_minmax(17rem,0.7fr)] lg:gap-14">
@@ -49,7 +50,8 @@ export function ParkDevelopmentSection({ updates, error }: Props) {
       </div>
 
       <aside className="flex flex-col gap-10 lg:pt-2">
-        <ResourcesPanel links={links} />
+        <LinksPanel links={links} />
+        <FilesPanel files={files} />
       </aside>
     </div>
   );
@@ -108,7 +110,7 @@ function UpdateItem({ item, index }: { item: HoaNewsItem; index: number }) {
   );
 }
 
-function ResourcesPanel({
+function LinksPanel({
   links,
 }: {
   links: Array<{ url: string; label: string }>;
@@ -148,6 +150,46 @@ function ResourcesPanel({
   );
 }
 
+function FilesPanel({
+  files,
+}: {
+  files: Array<{ url: string; label: string }>;
+}) {
+  return (
+    <div>
+      <p className="text-xs uppercase tracking-[0.22em] text-brick">Files</p>
+      <h3 className="font-display mt-2 text-2xl text-forest-deep">Downloads</h3>
+      <div className="brick-rule mt-3" />
+
+      {files.length === 0 ? (
+        <p className="mt-5 text-sm leading-relaxed text-forest-mid">
+          Documents will appear here as they are posted with updates.
+        </p>
+      ) : (
+        <ul className="mt-5 divide-y divide-forest/15 border-y border-forest/15">
+          {files.map((file) => (
+            <li key={file.url}>
+              <a
+                href={file.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-baseline justify-between gap-4 py-3.5 transition hover:bg-white/40"
+              >
+                <span className="min-w-0 text-sm leading-snug text-forest-deep">
+                  {file.label}
+                </span>
+                <span className="shrink-0 text-xs uppercase tracking-[0.16em] text-brick">
+                  PDF →
+                </span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
 function uniqueLinks(updates: HoaNewsItem[]) {
   const seen = new Set<string>();
   const links: Array<{ url: string; label: string }> = [];
@@ -162,4 +204,20 @@ function uniqueLinks(updates: HoaNewsItem[]) {
   }
 
   return links;
+}
+
+function uniqueFiles(updates: HoaNewsItem[]) {
+  const seen = new Set<string>();
+  const files: Array<{ url: string; label: string }> = [];
+
+  for (const item of updates) {
+    if (!item.file?.url || seen.has(item.file.url)) continue;
+    seen.add(item.file.url);
+    files.push({
+      url: item.file.url,
+      label: item.title,
+    });
+  }
+
+  return files;
 }
