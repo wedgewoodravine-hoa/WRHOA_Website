@@ -43,6 +43,15 @@ function MembershipDetails({ content }: { content: LeagueMembershipContent }) {
     setMembers(content.additionalMembers);
   }, [content.additionalMembers]);
 
+  function handlePrint() {
+    printMembershipCard({
+      cardImageSrc: content.cardImageSrc,
+      membershipNumber: content.membershipNumber,
+      expiresLabel: content.expiresLabel,
+      household: [...owners, ...members],
+    });
+  }
+
   return (
     <>
       <div className="membership-screen space-y-14">
@@ -61,13 +70,13 @@ function MembershipDetails({ content }: { content: LeagueMembershipContent }) {
             <div className="mt-4 flex flex-wrap items-center gap-3">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={handlePrint}
                 className="btn btn-brick"
               >
                 Print membership card
               </button>
               <p className="text-sm text-forest-mid">
-                Opens a single-page, wallet-size card for your printer.
+                Opens a wallet-size card you can print or share from your device.
               </p>
             </div>
           </div>
@@ -194,6 +203,185 @@ function MembershipDetails({ content }: { content: LeagueMembershipContent }) {
       />
     </>
   );
+}
+
+type PrintCardPayload = {
+  cardImageSrc: string;
+  membershipNumber?: string;
+  expiresLabel: string;
+  household: string[];
+};
+
+function printMembershipCard(payload: PrintCardPayload) {
+  const cardUrl = new URL(payload.cardImageSrc, window.location.origin).href;
+  const numberLabel = payload.membershipNumber
+    ? `#${escapeHtml(payload.membershipNumber)}`
+    : "Membership number unavailable";
+  const names =
+    payload.household.length > 0
+      ? `<p class="names">${escapeHtml(payload.household.join(" · "))}</p>`
+      : "";
+  const mutedClass = payload.membershipNumber ? "" : " muted";
+
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Wedgewood Community League Membership Card</title>
+<style>
+  :root { color-scheme: only light; }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    padding: 0;
+    background: #fff;
+    color: #111;
+    font-family: Georgia, "Times New Roman", serif;
+  }
+  body {
+    padding: 0.4in;
+  }
+  .hint {
+    margin: 0 0 0.18in;
+    font-family: system-ui, sans-serif;
+    font-size: 7pt;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: #666;
+  }
+  .card {
+    width: 3.375in;
+    max-width: 100%;
+    overflow: hidden;
+    border: 0.5pt dashed #888;
+    background: #fff;
+    break-inside: avoid;
+    page-break-inside: avoid;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .art {
+    display: block;
+    width: 100%;
+    height: auto;
+  }
+  .details {
+    padding: 0.1in 0.12in 0.11in;
+    border-top: 0.5pt solid #d0d0d0;
+    background: #f7f4ee;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .number {
+    margin: 0;
+    font-size: 14pt;
+    line-height: 1.05;
+    letter-spacing: 0.02em;
+    font-weight: 700;
+    color: #1a3324;
+  }
+  .number.muted {
+    font-size: 8pt;
+    font-weight: 600;
+    color: #555;
+  }
+  .names {
+    margin: 0.06in 0 0;
+    font-family: system-ui, sans-serif;
+    font-size: 7.5pt;
+    line-height: 1.25;
+    font-weight: 600;
+    color: #274433;
+  }
+  .expiry {
+    margin: 0.06in 0 0;
+    font-family: system-ui, sans-serif;
+    font-size: 6.5pt;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: #666;
+  }
+  .actions {
+    margin-top: 1rem;
+    font-family: system-ui, sans-serif;
+  }
+  .actions button {
+    appearance: none;
+    border: 0;
+    background: #8f3f2c;
+    color: #f4f0e8;
+    padding: 0.75rem 1.25rem;
+    font-size: 0.8rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+  }
+  .actions p {
+    margin: 0.75rem 0 0;
+    font-size: 0.85rem;
+    color: #555;
+    max-width: 22rem;
+  }
+  @media print {
+    @page { size: letter; margin: 0.4in; }
+    body { padding: 0; }
+    .actions { display: none !important; }
+  }
+</style>
+</head>
+<body>
+  <p class="hint">Wallet size · cut along the dashed line · colour print if available</p>
+  <div class="card">
+    <img class="art" src="${escapeHtml(cardUrl)}" alt="Wedgewood Residents Community League membership card" />
+    <div class="details">
+      <p class="number${mutedClass}">${numberLabel}</p>
+      ${names}
+      <p class="expiry">${escapeHtml(payload.expiresLabel)}</p>
+    </div>
+  </div>
+  <div class="actions">
+    <button type="button" id="print-btn">Print card</button>
+    <p>If printing does not open automatically, use this button or your browser&rsquo;s Share / Print option.</p>
+  </div>
+  <script>
+    (function () {
+      var button = document.getElementById("print-btn");
+      if (button) button.addEventListener("click", function () { window.print(); });
+      var img = document.querySelector(".art");
+      function triggerPrint() {
+        window.focus();
+        try { window.print(); } catch (e) {}
+      }
+      if (img && !img.complete) {
+        img.addEventListener("load", triggerPrint, { once: true });
+        img.addEventListener("error", triggerPrint, { once: true });
+      } else {
+        setTimeout(triggerPrint, 50);
+      }
+    })();
+  </script>
+</body>
+</html>`;
+
+  const printWindow = window.open("", "_blank");
+  if (!printWindow) {
+    // Popup blocked — fall back to in-page print stylesheet.
+    window.print();
+    return;
+  }
+
+  printWindow.document.open();
+  printWindow.document.write(html);
+  printWindow.document.close();
+}
+
+function escapeHtml(value: string) {
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 function PrintableMembershipCard({

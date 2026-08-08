@@ -56,6 +56,12 @@ export function DesignGuidelinesGuide({ categories, error }: Props) {
     0,
   );
   const searching = deferredQuery.trim().length > 0;
+  const totalCount = categories.reduce((n, c) => n + c.guidelines.length, 0);
+
+  function selectCategory(id: string) {
+    setQuery("");
+    setActiveCategory(id);
+  }
 
   if (error) {
     return (
@@ -73,63 +79,53 @@ export function DesignGuidelinesGuide({ categories, error }: Props) {
     );
   }
 
+  function renderCategoryNav() {
+    return (
+      <>
+        <CategoryButton
+          label="All"
+          active={!searching && activeCategory === "all"}
+          onClick={() => selectCategory("all")}
+          count={totalCount}
+        />
+        {categories.map((category) => (
+          <CategoryButton
+            key={category.id}
+            label={category.shortLabel}
+            active={!searching && activeCategory === category.id}
+            onClick={() => selectCategory(category.id)}
+            count={category.guidelines.length}
+          />
+        ))}
+      </>
+    );
+  }
+
   return (
-    <div className="grid gap-10 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-12">
-      <aside className="lg:sticky lg:top-28">
+    <div className="grid min-w-0 gap-8 lg:grid-cols-[15rem_minmax(0,1fr)] lg:items-start lg:gap-12">
+      <aside className="hidden min-w-0 lg:sticky lg:top-28 lg:block">
         <p className="text-xs uppercase tracking-[0.22em] text-brick">Browse</p>
         <h2 className="font-display mt-2 text-2xl text-forest-deep">
           Find a Guideline
         </h2>
         <div className="brick-rule mt-3" />
 
-        <label className="mt-6 block">
-          <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-forest-mid">
-            Search
-          </span>
-          <input
-            type="text"
-            role="searchbox"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.preventDefault();
-            }}
-            placeholder="Roof, fencing, setbacks…"
-            autoComplete="off"
-            autoCorrect="off"
-            spellCheck={false}
-            className="w-full border border-forest/20 bg-white/70 px-3 py-2.5 text-sm text-forest-deep outline-none transition placeholder:text-forest-mid/60 focus:border-brick"
-          />
-        </label>
+        <SearchField
+          id="guideline-search-desktop"
+          className="mt-6"
+          value={query}
+          onChange={setQuery}
+          placeholder="Roof, fencing, setbacks…"
+        />
 
         <nav
-          className="mt-5 flex gap-2 overflow-x-auto pb-1 lg:flex-col lg:overflow-visible lg:pb-0"
+          className="mt-5 flex flex-col gap-2"
           aria-label="Guideline categories"
         >
-          <CategoryButton
-            label="All"
-            active={!searching && activeCategory === "all"}
-            onClick={() => {
-              setQuery("");
-              setActiveCategory("all");
-            }}
-            count={categories.reduce((n, c) => n + c.guidelines.length, 0)}
-          />
-          {categories.map((category) => (
-            <CategoryButton
-              key={category.id}
-              label={category.shortLabel}
-              active={!searching && activeCategory === category.id}
-              onClick={() => {
-                setQuery("");
-                setActiveCategory(category.id);
-              }}
-              count={category.guidelines.length}
-            />
-          ))}
+          {renderCategoryNav()}
         </nav>
 
-        <div className="mt-8 hidden border-t border-forest/15 pt-6 lg:block">
+        <div className="mt-8 border-t border-forest/15 pt-6">
           <p className="text-xs uppercase tracking-[0.18em] text-forest-mid">
             Related
           </p>
@@ -150,13 +146,28 @@ export function DesignGuidelinesGuide({ categories, error }: Props) {
         </div>
       </aside>
 
-      <div>
+      <div className="min-w-0">
+        <div className="mb-6 lg:hidden">
+          <SearchField
+            id="guideline-search-mobile"
+            value={query}
+            onChange={setQuery}
+            placeholder="Search roofs, fencing, setbacks…"
+          />
+          <nav
+            className="-mx-4 mt-4 flex gap-2 overflow-x-auto px-4 pb-1 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+            aria-label="Guideline categories"
+          >
+            {renderCategoryNav()}
+          </nav>
+        </div>
+
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
-          <div>
+          <div className="min-w-0">
             <p className="text-xs uppercase tracking-[0.22em] text-brick">
               Guidelines
             </p>
-            <h2 className="font-display mt-2 text-3xl text-forest-deep">
+            <h2 className="font-display mt-2 text-2xl text-forest-deep sm:text-3xl">
               {searching
                 ? "Search results"
                 : activeCategory === "all"
@@ -180,22 +191,6 @@ export function DesignGuidelinesGuide({ categories, error }: Props) {
           </div>
         </div>
 
-        <label className="mb-6 block lg:hidden">
-          <span className="sr-only">Search guidelines</span>
-          <input
-            type="text"
-            role="searchbox"
-            value={query}
-            onChange={(event) => setQuery(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === "Enter") event.preventDefault();
-            }}
-            placeholder="Search roofs, fencing, setbacks…"
-            autoComplete="off"
-            className="w-full border border-forest/20 bg-white/70 px-3 py-2.5 text-sm text-forest-deep outline-none transition placeholder:text-forest-mid/60 focus:border-brick"
-          />
-        </label>
-
         {totalVisible === 0 ? (
           <p className="border border-forest/15 bg-white/40 px-5 py-6 text-sm text-forest-mid">
             No guidelines match that search. Try a broader term like “roof”,
@@ -204,13 +199,13 @@ export function DesignGuidelinesGuide({ categories, error }: Props) {
         ) : (
           <div className="space-y-10">
             {filtered.map((category) => (
-              <section key={category.id} id={category.id}>
+              <section key={category.id} id={category.id} className="min-w-0">
                 {searching || activeCategory === "all" ? (
                   <>
                     <p className="text-xs uppercase tracking-[0.18em] text-brick">
                       {category.shortLabel}
                     </p>
-                    <h3 className="font-display mt-1 text-2xl text-forest-deep">
+                    <h3 className="font-display mt-1 text-xl text-forest-deep sm:text-2xl">
                       {category.name}
                     </h3>
                     <div className="brick-rule mt-3" />
@@ -235,6 +230,43 @@ export function DesignGuidelinesGuide({ categories, error }: Props) {
   );
 }
 
+function SearchField({
+  id,
+  value,
+  onChange,
+  placeholder,
+  className = "",
+}: {
+  id: string;
+  value: string;
+  onChange: (value: string) => void;
+  placeholder: string;
+  className?: string;
+}) {
+  return (
+    <label className={`block ${className}`}>
+      <span className="mb-2 block text-xs uppercase tracking-[0.16em] text-forest-mid">
+        Search
+      </span>
+      <input
+        id={id}
+        type="search"
+        enterKeyHint="search"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.preventDefault();
+        }}
+        placeholder={placeholder}
+        autoComplete="off"
+        autoCorrect="off"
+        spellCheck={false}
+        className="w-full border border-forest/20 bg-white/70 px-3 py-2.5 text-sm text-forest-deep outline-none transition placeholder:text-forest-mid/60 focus:border-brick"
+      />
+    </label>
+  );
+}
+
 function CategoryButton({
   label,
   active,
@@ -256,7 +288,9 @@ function CategoryButton({
           : "border-forest/15 bg-white/50 text-forest-deep hover:border-brick/50"
       }`}
     >
-      <span className="block leading-snug">{label}</span>
+      <span className="block max-w-[11rem] truncate leading-snug lg:max-w-none lg:whitespace-normal">
+        {label}
+      </span>
       <span
         className={`mt-0.5 block text-[0.65rem] uppercase tracking-[0.14em] ${
           active ? "text-cream-text/75" : "text-forest-mid"
@@ -272,9 +306,9 @@ function GuidelineItem({ item }: { item: DesignGuideline }) {
   return (
     <details className="group py-1">
       <summary className="cursor-pointer list-none py-4 outline-none marker:content-none [&::-webkit-details-marker]:hidden">
-        <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="min-w-0">
-            <h4 className="font-display text-xl leading-snug text-forest-deep sm:text-2xl">
+            <h4 className="font-display text-lg leading-snug text-forest-deep sm:text-2xl">
               {titleCaseGuideline(item.title)}
             </h4>
             {item.description ? (
@@ -292,7 +326,7 @@ function GuidelineItem({ item }: { item: DesignGuideline }) {
 
       <div className="pb-5">
         {item.description ? (
-          <div className="max-w-3xl whitespace-pre-line text-sm leading-relaxed text-forest-mid">
+          <div className="max-w-3xl overflow-x-auto whitespace-pre-line break-words text-sm leading-relaxed text-forest-mid">
             {linkify(item.description)}
           </div>
         ) : (
@@ -302,7 +336,7 @@ function GuidelineItem({ item }: { item: DesignGuideline }) {
         )}
 
         {item.files.length > 0 ? (
-          <div className="mt-4 flex flex-wrap gap-x-5 gap-y-2">
+          <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
             {item.files.map((file) => (
               <a
                 key={`${item.id}-${file.url}`}
