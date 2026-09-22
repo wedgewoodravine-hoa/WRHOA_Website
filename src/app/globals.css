@@ -77,6 +77,19 @@ a {
   text-decoration: none;
 }
 
+/*
+ * Ask the browser to handle taps on controls immediately. Without this,
+ * some Android browsers (including Samsung Internet) spend the first tap
+ * on a hover state and never open the control.
+ */
+a,
+button,
+summary,
+select,
+label {
+  touch-action: manipulation;
+}
+
 ::selection {
   background: rgba(143, 63, 44, 0.22);
   color: var(--bark);
