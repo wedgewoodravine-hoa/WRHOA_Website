@@ -1,6 +1,7 @@
 "use client";
 
 import {
+  memo,
   type FormEvent,
   useEffect,
   useId,
@@ -22,13 +23,16 @@ import {
   KNACK_APP_ID,
   clearSession,
   loadSession,
+  releaseEmbeddedKnackRuntime,
   syncKnackRuntimeSession,
 } from "@/lib/knack-session";
 import {
   fetchVarianceApplicationContext,
+  fetchVarianceApplicationStatus,
   submitVarianceApplication,
   type VarianceApplicationContext,
   type VarianceApplicationResult,
+  type VariancePaymentStatus,
 } from "@/lib/knack-forms";
 
 const VARIANCE_PROFILES = ["profile_5"];
@@ -59,6 +63,12 @@ function VarianceApplicationWizard({
   context: VarianceApplicationContext;
 }) {
   const [result, setResult] = useState<VarianceApplicationResult | null>(null);
+
+  useEffect(() => {
+    // Sign-in probes the Town Hall & AGM embed. Remove it before this form
+    // so that app cannot take over the payment step.
+    releaseEmbeddedKnackRuntime();
+  }, []);
 
   if (result) {
     return <VariancePaymentStep result={result} />;
@@ -168,7 +178,6 @@ function VarianceApplicationForm({
         date2: homeowner2.trim() ? date2 : undefined,
       });
 
-      await syncKnackRuntimeSession(session);
       onSubmitted(result);
     } catch (err) {
       if (err instanceof AuthExpiredError) {
@@ -451,28 +460,13 @@ function VariancePaymentStep({
   result: VarianceApplicationResult;
 }) {
   const mountId = useId().replace(/:/g, "");
-  const loadedKey = useRef<string | null>(null);
-
-  useEffect(() => {
-    const key = `${KNACK_APP_ID}-${result.paymentDistributionKey}`;
-    window.app_id = KNACK_APP_ID;
-    window.distribution_key = result.paymentDistributionKey;
-    window.location.hash = result.paymentUrl;
-
-    if (loadedKey.current === key) return;
-    loadedKey.current = key;
-
-    const existing = document.querySelector<HTMLScriptElement>(
-      `script[data-knack-pay="${key}"]`,
-    );
-    if (existing) return;
-
-    const script = document.createElement("script");
-    script.src = `https://loader.knack.com/${KNACK_APP_ID}/${result.paymentDistributionKey}/knack.js`;
-    script.async = true;
-    script.dataset.knackPay = key;
-    document.body.appendChild(script);
-  }, [result.paymentDistributionKey, result.paymentUrl]);
+  const [applicationNumber, setApplicationNumber] = useState(
+    result.applicationNumber,
+  );
+  const [paymentStatus, setPaymentStatus] =
+    useState<VariancePaymentStatus>("unpaid");
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const paid = paymentStatus === "complete";
 
   useEffect(() => {
     document
@@ -480,60 +474,262 @@ function VariancePaymentStep({
       ?.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [mountId]);
 
+  useEffect(() => {
+    let cancelled = false;
+    const distributionKey = result.paymentDistributionKey;
+    const paymentHash = result.paymentUrl.replace(/^#/, "");
+    const mountElementId = `knack-${distributionKey}`;
+    const session = loadSession();
+
+    function hashValue() {
+      return window.location.hash.replace(/^#/, "");
+    }
+
+    function hashAllowsCheckout(hash: string) {
+      return (
+        hash.includes("formcharge-payment") ||
+        hash.includes("variance-application-confirmation") ||
+        hash.includes("variance-application-form-login")
+      );
+    }
+
+    function forcePaymentHash() {
+      if (cancelled) return;
+      const hash = hashValue();
+      if (hash.includes("variance-application-confirmation")) {
+        setPaymentStatus("complete");
+        return;
+      }
+      if (hashAllowsCheckout(hash)) return;
+      if (window.location.hash !== `#${paymentHash}`) {
+        window.location.hash = paymentHash;
+      }
+    }
+
+    async function mountCheckout() {
+      setCheckoutError(null);
+      releaseEmbeddedKnackRuntime();
+      document.getElementById("knack-dist_17")?.remove();
+
+      window.app_id = KNACK_APP_ID;
+      window.distribution_key = distributionKey;
+      window.location.hash = paymentHash;
+
+      const mount = document.getElementById(mountElementId);
+      if (mount && mount.childElementCount === 0) {
+        mount.textContent = "Loading secure checkout…";
+      }
+
+      const key = `${KNACK_APP_ID}-${distributionKey}`;
+      document
+        .querySelectorAll<HTMLScriptElement>(`script[data-knack-pay="${key}"]`)
+        .forEach((script) => script.remove());
+
+      try {
+        await loadKnackPayScript(distributionKey, key);
+      } catch {
+        if (!cancelled) {
+          setCheckoutError(
+            "Secure checkout failed to load. Please refresh and try again.",
+          );
+        }
+        return;
+      }
+
+      const readyDeadline = Date.now() + 8000;
+      while (!cancelled && Date.now() < readyDeadline && !window.Knack) {
+        await wait(50);
+      }
+      if (cancelled) return;
+
+      if (session?.token) {
+        await syncKnackRuntimeSession(session);
+      }
+      forcePaymentHash();
+    }
+
+    void mountCheckout();
+
+    function onHashChange() {
+      const hash = hashValue();
+      if (hash.includes("variance-application-confirmation")) {
+        setPaymentStatus("complete");
+        return;
+      }
+      const mount = document.getElementById(mountElementId);
+      if (mount?.querySelector("#kn-scene_268, [id*='scene_268']")) {
+        forcePaymentHash();
+        return;
+      }
+      if (!hashAllowsCheckout(hash)) forcePaymentHash();
+    }
+
+    window.addEventListener("hashchange", onHashChange);
+    const guard = window.setInterval(() => {
+      document.getElementById("knack-dist_17")?.remove();
+      const hash = hashValue();
+      if (hash.includes("variance-application-confirmation")) {
+        setPaymentStatus("complete");
+        return;
+      }
+      if (
+        hash.includes("town-hall") ||
+        hash.includes("meetings") ||
+        document
+          .getElementById(mountElementId)
+          ?.querySelector("#kn-scene_268, [id*='scene_268']")
+      ) {
+        forcePaymentHash();
+      }
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("hashchange", onHashChange);
+      window.clearInterval(guard);
+    };
+  }, [result.paymentDistributionKey, result.paymentUrl]);
+
+  useEffect(() => {
+    let cancelled = false;
+    const session = loadSession();
+    if (!session?.token) return;
+
+    async function poll() {
+      try {
+        const status = await fetchVarianceApplicationStatus(
+          session!.token,
+          result.id,
+        );
+        if (cancelled) return;
+        if (status.applicationNumber) {
+          setApplicationNumber(status.applicationNumber);
+        }
+        if (status.paymentStatus === "unpaid") return;
+        setPaymentStatus((current) =>
+          current === "complete" ? current : status.paymentStatus,
+        );
+      } catch (error) {
+        if (cancelled || !(error instanceof AuthExpiredError)) return;
+        clearSession();
+        setCheckoutError("Your session has expired. Please sign in again.");
+      }
+    }
+
+    void poll();
+    const timer = window.setInterval(() => {
+      void poll();
+    }, 3000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [result.id]);
+
+  const numberLabel = applicationNumber
+    ? `Variance application #${applicationNumber}`
+    : "Variance application";
+
   return (
     <div className="space-y-12" id={`variance-checkout-${mountId}`}>
       <section>
         <p className="text-xs uppercase tracking-[0.22em] text-brick">
-          Application received
+          {paid ? "Payment received" : "Payment required"}
         </p>
         <h2 className="font-display mt-2 text-3xl text-forest-deep">
-          Variance application #{result.applicationNumber}
+          {numberLabel}
         </h2>
         <div className="brick-rule mt-4" />
         <p className="mt-4 max-w-2xl text-sm leading-relaxed text-forest-mid">
-          {result.feeLabel}. Complete payment below to finish the online portion
-          of your application.
+          {paid
+            ? "Your application fee has been received. Use the number below when you drop off your material sample."
+            : `${result.feeLabel}. The application is not complete until this payment is received.`}
         </p>
+        {!applicationNumber && !paid ? (
+          <p className="mt-3 text-sm text-forest-mid">
+            Your variance application number will appear here shortly.
+          </p>
+        ) : null}
+        {paymentStatus === "failed" ? (
+          <p className="mt-3 text-sm text-brick-deep">
+            The payment did not go through. You can try the checkout again.
+          </p>
+        ) : null}
+        {paymentStatus === "pending" ? (
+          <p className="mt-3 text-sm text-forest-mid">
+            PayPal is still confirming this payment. Keep this page open.
+          </p>
+        ) : null}
       </section>
 
-      <section>
-        <h3 className="font-display text-2xl text-forest-deep">
-          One last step after payment
-        </h3>
-        <div className="brick-rule mt-3" />
-        <ol className="mt-5 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-forest-mid">
-          <li>
-            Attach variance application number{" "}
-            <span className="font-medium text-forest-deep">
-              #{result.applicationNumber}
-            </span>{" "}
-            to your building material sample.
-          </li>
-          <li>Drop your samples off at 783 Wells Wynd.</li>
-        </ol>
-      </section>
+      {paid ? (
+        <section>
+          <h3 className="font-display text-2xl text-forest-deep">
+            One last step
+          </h3>
+          <div className="brick-rule mt-3" />
+          <ol className="mt-5 list-decimal space-y-3 pl-5 text-sm leading-relaxed text-forest-mid">
+            <li>
+              Attach variance application number{" "}
+              <span className="font-medium text-forest-deep">
+                {applicationNumber ? `#${applicationNumber}` : "shown above"}
+              </span>{" "}
+              to your building material sample.
+            </li>
+            <li>Drop your samples off at 783 Wells Wynd.</li>
+          </ol>
+        </section>
+      ) : (
+        <section>
+          <p className="text-xs uppercase tracking-[0.22em] text-brick">
+            Secure checkout
+          </p>
+          <h3 className="font-display mt-2 text-3xl text-forest-deep">
+            Submit application fee
+          </h3>
+          <div className="brick-rule mt-4" />
+          <p className="mt-4 max-w-2xl text-sm leading-relaxed text-forest-mid">
+            Complete payment in the checkout below. If prompted, sign in with
+            the same HOA email and password. You do not need a PayPal account.
+          </p>
+        </section>
+      )}
 
-      <section>
-        <p className="text-xs uppercase tracking-[0.22em] text-brick">
-          Secure checkout
-        </p>
-        <h3 className="font-display mt-2 text-3xl text-forest-deep">
-          Submit application fee
-        </h3>
-        <div className="brick-rule mt-4" />
-        <p className="mt-4 max-w-2xl text-sm leading-relaxed text-forest-mid">
-          Complete payment in the checkout below. If prompted, sign in with the
-          same HOA email and password. You do not need a PayPal account.
-        </p>
-        <div className="knack-shell mt-6 p-2 sm:p-4">
-          <div
-            id={`knack-${result.paymentDistributionKey}`}
-            className="min-h-[720px]"
-          >
-            Loading secure checkout…
-          </div>
-        </div>
-      </section>
+      <FormError message={checkoutError} />
+      <CheckoutFrame distributionKey={result.paymentDistributionKey} />
     </div>
   );
+}
+
+const CheckoutFrame = memo(function CheckoutFrame({
+  distributionKey,
+}: {
+  distributionKey: string;
+}) {
+  return (
+    <div className="knack-shell mt-6 p-2 sm:p-4">
+      <div
+        id={`knack-${distributionKey}`}
+        className="min-h-[720px]"
+        suppressHydrationWarning
+      />
+    </div>
+  );
+});
+
+function loadKnackPayScript(distributionKey: string, key: string) {
+  return new Promise<void>((resolve, reject) => {
+    const script = document.createElement("script");
+    script.src = `https://loader.knack.com/${KNACK_APP_ID}/${distributionKey}/knack.js`;
+    script.async = true;
+    script.dataset.knackPay = key;
+    script.onload = () => resolve();
+    script.onerror = () => reject(new Error("Secure checkout failed to load."));
+    document.body.appendChild(script);
+  });
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => window.setTimeout(resolve, ms));
 }

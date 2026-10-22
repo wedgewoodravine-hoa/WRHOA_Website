@@ -1045,6 +1045,49 @@ function clearKnackMounts() {
   });
 }
 
+/**
+ * Drop a previously loaded Knack embed (the session probe is the Town Hall & AGM
+ * app) so a later checkout can start cleanly. Does not sign the user out.
+ */
+export function releaseEmbeddedKnackRuntime() {
+  if (typeof window === "undefined") return;
+
+  const jq = (
+    window as Window & {
+      jQuery?: (target: Window) => { off: (event: string) => void };
+      Backbone?: { history?: { stop?: () => void } };
+    }
+  ).jQuery;
+  try {
+    jq?.(window).off("hashchange");
+  } catch {
+    // ignore
+  }
+
+  try {
+    (
+      window as Window & { Backbone?: { history?: { stop?: () => void } } }
+    ).Backbone?.history?.stop?.();
+  } catch {
+    // ignore
+  }
+
+  document
+    .querySelectorAll<HTMLScriptElement>(
+      "script[data-knack], script[data-knack-pay], script[data-knack-session]",
+    )
+    .forEach((script) => script.remove());
+
+  document.getElementById(`knack-${SESSION_PROBE_DIST}`)?.remove();
+
+  const runtime = window as Window & { Knack?: unknown };
+  try {
+    delete runtime.Knack;
+  } catch {
+    runtime.Knack = undefined;
+  }
+}
+
 function destroyKnackUser() {
   return new Promise<void>((resolve) => {
     const destroy = window.Knack?.user?.destroy;

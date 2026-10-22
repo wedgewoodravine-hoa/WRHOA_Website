@@ -134,6 +134,13 @@ export type VarianceApplicationResult = {
   feeLabel: string;
 };
 
+export type VariancePaymentStatus = "unpaid" | "pending" | "complete" | "failed";
+
+export type VarianceApplicationStatus = {
+  applicationNumber: string;
+  paymentStatus: VariancePaymentStatus;
+};
+
 type RecordsResponse<T> = {
   records?: T[];
   total_records?: number;
@@ -439,22 +446,20 @@ export async function submitVarianceApplication(
     payload.field_628 = knackDatePayload(input.date2);
   }
 
-  const record = await createViewRecord(
-    VARIANCE_SCENE,
-    VARIANCE_FORM_VIEW,
-    payload,
-    token,
-  );
+  // The public "knack" API key runs this form's emails immediately. The live
+  // checkout uses renderer-session, which holds those rules until payment.
+  const record = await createVarianceRecord(token, payload);
 
   const id = String(record.id || "");
   if (!id) {
     throw new Error("Variance application was created without a record id.");
   }
 
-  const applicationNumber =
-    readString(record.field_613_raw) ||
-    readString(record.field_613) ||
-    id;
+  const applicationNumber = await resolveVarianceApplicationNumber(
+    token,
+    id,
+    record,
+  );
 
   return {
     id,
@@ -462,6 +467,179 @@ export async function submitVarianceApplication(
     paymentUrl: `${VARIANCE_PAYMENT_HASH}/${id}/`,
     paymentDistributionKey: VARIANCE_PAYMENT_DISTRIBUTION,
     feeLabel: "Application Fee: $100.00 + $5.00 GST = $105.00",
+  };
+}
+
+const VARIANCE_STATUS_VIEWS = [
+  ["scene_434", "view_804"],
+  ["scene_429", "view_794"],
+  ["scene_433", "view_800"],
+  ["scene_371", "view_799"],
+] as const;
+
+export async function fetchVarianceApplicationStatus(
+  token: string,
+  recordId: string,
+): Promise<VarianceApplicationStatus> {
+  let applicationNumber = "";
+  let paymentStatus: VariancePaymentStatus = "unpaid";
+
+  for (const [scene, view] of VARIANCE_STATUS_VIEWS) {
+    const record = await readVarianceRecord(token, scene, view, recordId);
+    if (!record) continue;
+    applicationNumber ||= readApplicationNumber(record);
+    paymentStatus = preferPaymentStatus(
+      paymentStatus,
+      readPaymentStatus(record),
+    );
+    if (applicationNumber && paymentStatus === "complete") break;
+  }
+
+  return { applicationNumber, paymentStatus };
+}
+
+async function resolveVarianceApplicationNumber(
+  token: string,
+  recordId: string,
+  created: Record<string, unknown>,
+) {
+  const immediate = readApplicationNumber(created);
+  if (immediate) return immediate;
+
+  for (let attempt = 0; attempt < 4; attempt += 1) {
+    if (attempt > 0) {
+      await wait(400);
+    }
+    const status = await fetchVarianceApplicationStatus(token, recordId);
+    if (status.applicationNumber) return status.applicationNumber;
+  }
+
+  return "";
+}
+
+async function createVarianceRecord(
+  token: string,
+  payload: Record<string, unknown>,
+) {
+  const sceneUrl = `https://api.knack.com/v1/scenes/${VARIANCE_SCENE}/views/${VARIANCE_FORM_VIEW}/records?format=both`;
+  const pageUrl = `https://api.knack.com/v1/pages/${VARIANCE_SCENE}/views/${VARIANCE_FORM_VIEW}/records`;
+  const livePayload = {
+    ...payload,
+    url: typeof window === "undefined" ? "" : window.location.href,
+    crumbtrail: {},
+  };
+
+  try {
+    const live = await postViewRecord(sceneUrl, livePayload, token, "renderer");
+    if (live.ok) return live.record;
+    // 401/403/404/400: renderer session was rejected or the route differs.
+    // 5xx may already have saved the record, so do not submit again.
+    if (live.status >= 500) throw live.error;
+  } catch (error) {
+    if (!(error instanceof TypeError)) throw error;
+  }
+
+  const scene = await postViewRecord(sceneUrl, payload, token, "knack");
+  if (scene.ok) return scene.record;
+  if (scene.expired) throw new AuthExpiredError();
+  if (scene.status !== 404) throw scene.error;
+
+  const legacy = await postViewRecord(pageUrl, payload, token, "knack");
+  if (legacy.ok) return legacy.record;
+  if (legacy.expired) throw new AuthExpiredError();
+  throw legacy.error;
+}
+
+async function readVarianceRecord(
+  token: string,
+  scene: string,
+  view: string,
+  recordId: string,
+) {
+  const headers = {
+    ...knackHeaders,
+    Authorization: token.startsWith("Bearer ") ? token : token,
+  };
+  const urls = [
+    `https://api.knack.com/v1/scenes/${scene}/views/${view}/records/${recordId}?format=both`,
+    `https://api.knack.com/v1/pages/${scene}/views/${view}/records/${recordId}?format=both`,
+  ];
+
+  for (const url of urls) {
+    const res = await fetch(url, { headers });
+    if (res.status === 404) continue;
+    if (res.status === 401 || res.status === 403) return null;
+    if (!res.ok) return null;
+    const data = (await res.json()) as {
+      record?: Record<string, unknown>;
+    } & Record<string, unknown>;
+    return data.record ?? data;
+  }
+
+  return null;
+}
+
+function varianceRequestHeaders(
+  token: string,
+  mode: "renderer" | "knack",
+): Record<string, string> {
+  const authorization = token.startsWith("Bearer ") ? token : `Bearer ${token}`;
+  if (mode === "knack" || typeof window === "undefined") {
+    return {
+      ...knackHeaders,
+      Authorization: authorization,
+    };
+  }
+
+  let timezone = "America/Edmonton";
+  try {
+    timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || timezone;
+  } catch {
+    // Keep the Edmonton default.
+  }
+
+  return {
+    "Content-Type": "application/json",
+    "X-Knack-Application-Id": KNACK_APP_ID,
+    "X-Knack-REST-API-Key": "renderer-session",
+    Authorization: authorization,
+    "x-knack-new-builder": "true",
+    "knack-client-timezone": timezone,
+    "x-knack-live-app-version": "v2",
+    "x-knack-live-app-origin-hostname": window.location.hostname,
+    "x-knack-live-app-origin-pathname": window.location.pathname,
+    "x-knack-live-app-embedded": "true",
+  };
+}
+
+async function postViewRecord(
+  url: string,
+  payload: Record<string, unknown>,
+  token: string,
+  mode: "renderer" | "knack",
+): Promise<
+  | { ok: true; record: Record<string, unknown> }
+  | { ok: false; status: number; expired: boolean; error: Error }
+> {
+  const res = await fetch(url, {
+    method: "POST",
+    headers: varianceRequestHeaders(token, mode),
+    body: JSON.stringify(payload),
+  });
+
+  if (res.ok) {
+    const data = (await res.json()) as {
+      record?: Record<string, unknown>;
+    } & Record<string, unknown>;
+    return { ok: true, record: data.record ?? data };
+  }
+
+  const message = await readKnackError(res);
+  return {
+    ok: false,
+    status: res.status,
+    expired: res.status === 401 || res.status === 403,
+    error: new Error(message || `Unable to submit form (${res.status}).`),
   };
 }
 
@@ -664,8 +842,76 @@ function parseEmailValue(value: unknown) {
   return "";
 }
 
-function readString(value: unknown) {
-  return typeof value === "string" ? value.trim() : "";
+function readApplicationNumber(record: Record<string, unknown>) {
+  const candidates = [record.field_613_raw, record.field_613];
+  for (const candidate of candidates) {
+    const text = readKnackScalar(candidate);
+    if (!text || isKnackRecordId(text)) continue;
+    return text;
+  }
+  return "";
+}
+
+function readPaymentStatus(
+  record: Record<string, unknown>,
+): VariancePaymentStatus {
+  const parts: string[] = [];
+  for (const [key, value] of Object.entries(record)) {
+    if (!key.includes("field_51") && !key.includes("field_625")) continue;
+    parts.push(readKnackScalar(value));
+  }
+  const blob = parts.join(" ").toLowerCase();
+  if (blob.includes("failed")) return "failed";
+  if (blob.includes("complete")) return "complete";
+  if (blob.includes("pending")) return "pending";
+
+  const connection = record.field_625_raw ?? record.field_625;
+  if (Array.isArray(connection) && connection.length > 0) return "pending";
+  if (connection && typeof connection === "object") return "pending";
+  return "unpaid";
+}
+
+function preferPaymentStatus(
+  current: VariancePaymentStatus,
+  next: VariancePaymentStatus,
+): VariancePaymentStatus {
+  if (current === "complete" || next === "complete") return "complete";
+  if (current === "failed" || next === "failed") return "failed";
+  if (current === "pending" || next === "pending") return "pending";
+  return "unpaid";
+}
+
+function readKnackScalar(value: unknown): string {
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return String(value);
+  }
+  if (typeof value === "string") {
+    return value
+      .replace(/<[^>]+>/g, " ")
+      .replace(/\s+/g, " ")
+      .trim();
+  }
+  if (Array.isArray(value)) {
+    return value.map((item) => readKnackScalar(item)).filter(Boolean).join(" ");
+  }
+  if (value && typeof value === "object") {
+    const row = value as Record<string, unknown>;
+    for (const key of ["identifier", "number", "value", "full"]) {
+      if (row[key] != null) {
+        const text = readKnackScalar(row[key]);
+        if (text) return text;
+      }
+    }
+  }
+  return "";
+}
+
+function isKnackRecordId(value: string) {
+  return /^[a-f0-9]{24}$/i.test(value);
+}
+
+function wait(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function stripHtml(value: string) {
