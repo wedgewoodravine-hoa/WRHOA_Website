@@ -158,33 +158,59 @@ type VolunteerListRecord = {
   field_436_raw?: { url?: string; label?: string } | string | null;
 };
 
+type PropertyConnectionRecord = KnackConnectionOption & {
+  identifier?: string;
+};
+
+function mapPropertyOptions(
+  records: PropertyConnectionRecord[],
+): KnackConnectionOption[] {
+  return records
+    .map((record) => ({
+      id: record.id,
+      label: record.identifier?.trim() || record.label || "Property",
+    }))
+    .sort((a, b) =>
+      a.label.localeCompare(b.label, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      }),
+    );
+}
+
+async function fetchPropertyConnections(
+  search?: string,
+): Promise<KnackConnectionOption[]> {
+  const url = new URL(
+    `https://api.knack.com/v1/scenes/${NON_HOMEOWNER_CONTACT_SCENE}/views/${NON_HOMEOWNER_CONTACT_VIEW}/connections/field_115`,
+  );
+  url.searchParams.set("rows_per_page", "1000");
+  // This connection lookup ignores `filters` and returns every property.
+  // `search` matches the address identifier.
+  if (search) url.searchParams.set("search", search);
+
+  const res = await fetch(url.toString(), { headers: knackHeaders });
+  if (!res.ok) {
+    throw new Error(`Unable to load properties (${res.status}).`);
+  }
+
+  const data = (await res.json()) as RecordsResponse<PropertyConnectionRecord>;
+  return mapPropertyOptions(data.records ?? []);
+}
+
 export async function searchContactProperties(
   query: string,
 ): Promise<KnackConnectionOption[]> {
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
+  return fetchPropertyConnections(trimmed);
+}
 
-  const url = new URL(
-    `https://api.knack.com/v1/scenes/${NON_HOMEOWNER_CONTACT_SCENE}/views/${NON_HOMEOWNER_CONTACT_VIEW}/connections/field_115`,
-  );
-  url.searchParams.set("rows_per_page", "25");
-  // Connection lookup ignores `filters` and returns every property.
-  // `search` matches the address identifier.
-  url.searchParams.set("search", trimmed);
-
-  const res = await fetch(url.toString(), { headers: knackHeaders });
-  if (!res.ok) {
-    throw new Error(`Unable to search properties (${res.status}).`);
-  }
-
-  const data = (await res.json()) as RecordsResponse<KnackConnectionOption & {
-    identifier?: string;
-  }>;
-
-  return (data.records ?? []).map((record) => ({
-    id: record.id,
-    label: record.identifier?.trim() || record.label || "Property",
-  }));
+/** Every property that can be chosen on a contact form, not only the signed-in homeowner's. */
+export async function fetchContactPropertyOptions(): Promise<
+  KnackConnectionOption[]
+> {
+  return fetchPropertyConnections();
 }
 
 export async function fetchHomeownerContactProperties(

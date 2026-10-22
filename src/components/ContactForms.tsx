@@ -23,6 +23,7 @@ import {
   isLegalDocumentationCategory,
 } from "@/lib/contact-forms";
 import {
+  fetchContactPropertyOptions,
   fetchHomeownerContactProperties,
   searchContactProperties,
   submitHomeownerContact,
@@ -60,15 +61,37 @@ export function NonHomeownerContactSection({
   );
 }
 
+type HomeownerContactOptions = {
+  ownProperties: KnackConnectionOption[];
+  communityProperties: KnackConnectionOption[];
+};
+
+async function loadHomeownerContactOptions(
+  token: string,
+): Promise<HomeownerContactOptions> {
+  const ownProperties = await fetchHomeownerContactProperties(token);
+  try {
+    const communityProperties = await fetchContactPropertyOptions();
+    return { ownProperties, communityProperties };
+  } catch {
+    return { ownProperties, communityProperties: [] };
+  }
+}
+
 export function HomeownerContactSection() {
   return (
     <HoaAuthPortal
       requireGoodStanding={false}
       allowedProfiles={CONTACT_PROFILES}
       description="Sign in with your HOA portal account to send a message to the association."
-      load={fetchHomeownerContactProperties}
+      load={loadHomeownerContactOptions}
     >
-      {(properties) => <HomeownerContactForm properties={properties} />}
+      {(options) => (
+        <HomeownerContactForm
+          ownProperties={options.ownProperties}
+          communityProperties={options.communityProperties}
+        />
+      )}
     </HoaAuthPortal>
   );
 }
@@ -359,14 +382,16 @@ function PublicContactForm({
 }
 
 function HomeownerContactForm({
-  properties,
+  ownProperties,
+  communityProperties,
 }: {
-  properties: KnackConnectionOption[];
+  ownProperties: KnackConnectionOption[];
+  communityProperties: KnackConnectionOption[];
 }) {
   const formId = useId();
   const [category, setCategory] = useState("");
   const [message, setMessage] = useState("");
-  const [property, setProperty] = useState<KnackConnectionOption | null>(null);
+  const [propertyId, setPropertyId] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -389,7 +414,7 @@ function HomeownerContactForm({
       await submitHomeownerContact(session.token, {
         category,
         message,
-        propertyId: property?.id,
+        propertyId: propertyId || undefined,
         email: showContactDetails ? email : undefined,
         phone: showContactDetails ? phone : undefined,
       });
@@ -484,13 +509,12 @@ function HomeownerContactForm({
         />
       </label>
 
-      <PropertySearchField
+      <PropertySelectField
         id={`${formId}-property`}
-        label="Property in question"
-        hint="Any Wedgewood address"
-        value={property}
-        onChange={setProperty}
-        suggestions={properties}
+        ownProperties={ownProperties}
+        communityProperties={communityProperties}
+        value={propertyId}
+        onChange={setPropertyId}
       />
 
       <FormError message={error} />
@@ -506,22 +530,78 @@ function HomeownerContactForm({
   );
 }
 
+function PropertySelectField({
+  id,
+  ownProperties,
+  communityProperties,
+  value,
+  onChange,
+}: {
+  id: string;
+  ownProperties: KnackConnectionOption[];
+  communityProperties: KnackConnectionOption[];
+  value: string;
+  onChange: (propertyId: string) => void;
+}) {
+  const ownIds = new Set(ownProperties.map((property) => property.id));
+  const otherProperties = communityProperties.filter(
+    (property) => !ownIds.has(property.id),
+  );
+  const hasCommunityList = communityProperties.length > 0;
+
+  return (
+    <label className="block">
+      <FieldLabel htmlFor={id} hint="Any Wedgewood address">
+        Property in question
+      </FieldLabel>
+      <select
+        id={id}
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+        className={fieldClassName}
+      >
+        <option value="">Select a property…</option>
+        {ownProperties.length > 0 ? (
+          <optgroup label="Your properties">
+            {ownProperties.map((property) => (
+              <option key={property.id} value={property.id}>
+                {property.label}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+        {otherProperties.length > 0 ? (
+          <optgroup label="Neighboring properties">
+            {otherProperties.map((property) => (
+              <option key={property.id} value={property.id}>
+                {property.label}
+              </option>
+            ))}
+          </optgroup>
+        ) : null}
+      </select>
+      {hasCommunityList ? null : (
+        <p className="mt-2 text-xs text-brick-deep">
+          Other Wedgewood addresses could not be loaded. Refresh the page to
+          try again.
+        </p>
+      )}
+    </label>
+  );
+}
+
 function PropertySearchField({
   id,
   label,
   value,
   onChange,
   required,
-  hint,
-  suggestions = [],
 }: {
   id: string;
   label: string;
   value: KnackConnectionOption | null;
   onChange: (next: KnackConnectionOption | null) => void;
   required?: boolean;
-  hint?: string;
-  suggestions?: KnackConnectionOption[];
 }) {
   const [query, setQuery] = useState(value?.label || "");
   const [options, setOptions] = useState<KnackConnectionOption[]>([]);
@@ -578,17 +658,9 @@ function PropertySearchField({
     };
   }, [query, value]);
 
-  const trimmedQuery = query.trim();
-  const showingOwnProperties =
-    suggestions.length > 0 &&
-    (trimmedQuery.length < 2 || (value != null && query === value.label));
-  const visibleOptions = showingOwnProperties ? suggestions : options;
-
   return (
     <div className="relative block">
-      <FieldLabel htmlFor={id} hint={hint}>
-        {label}
-      </FieldLabel>
+      <FieldLabel htmlFor={id}>{label}</FieldLabel>
       <input
         id={id}
         required={required && !value}
@@ -606,7 +678,7 @@ function PropertySearchField({
         placeholder="Start typing a street address…"
         autoComplete="off"
         role="combobox"
-        aria-expanded={open && visibleOptions.length > 0}
+        aria-expanded={open && options.length > 0}
         aria-controls={`${id}-options`}
         aria-autocomplete="list"
       />
@@ -620,17 +692,12 @@ function PropertySearchField({
         <p className="mt-2 text-xs text-brick-deep">{searchError}</p>
       ) : null}
 
-      {open && visibleOptions.length > 0 ? (
+      {open && options.length > 0 ? (
         <ul
           id={`${id}-options`}
           className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-forest/20 bg-white shadow-sm"
         >
-          {showingOwnProperties ? (
-            <li className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.16em] text-forest-mid">
-              Your properties
-            </li>
-          ) : null}
-          {visibleOptions.map((option) => (
+          {options.map((option) => (
             <li key={option.id}>
               <button
                 type="button"
@@ -647,11 +714,6 @@ function PropertySearchField({
               </button>
             </li>
           ))}
-          {showingOwnProperties ? (
-            <li className="border-t border-forest/10 px-3 py-2 text-xs text-forest-mid">
-              Type a street name to search every Wedgewood address.
-            </li>
-          ) : null}
         </ul>
       ) : null}
     </div>
