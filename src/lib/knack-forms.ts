@@ -164,19 +164,13 @@ export async function searchContactProperties(
   const trimmed = query.trim();
   if (trimmed.length < 2) return [];
 
-  const filters = JSON.stringify([
-    {
-      field: "field_8",
-      operator: "contains",
-      value: trimmed.toUpperCase(),
-    },
-  ]);
-
   const url = new URL(
     `https://api.knack.com/v1/scenes/${NON_HOMEOWNER_CONTACT_SCENE}/views/${NON_HOMEOWNER_CONTACT_VIEW}/connections/field_115`,
   );
   url.searchParams.set("rows_per_page", "25");
-  url.searchParams.set("filters", filters);
+  // Connection lookup ignores `filters` and returns every property.
+  // `search` matches the address identifier.
+  url.searchParams.set("search", trimmed);
 
   const res = await fetch(url.toString(), { headers: knackHeaders });
   if (!res.ok) {

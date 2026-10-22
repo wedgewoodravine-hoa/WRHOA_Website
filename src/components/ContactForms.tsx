@@ -4,7 +4,6 @@ import {
   type FormEvent,
   useEffect,
   useId,
-  useMemo,
   useState,
 } from "react";
 import {
@@ -367,7 +366,7 @@ function HomeownerContactForm({
   const formId = useId();
   const [category, setCategory] = useState("");
   const [message, setMessage] = useState("");
-  const [propertyId, setPropertyId] = useState(properties[0]?.id || "");
+  const [property, setProperty] = useState<KnackConnectionOption | null>(null);
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -375,13 +374,6 @@ function HomeownerContactForm({
   const [done, setDone] = useState(false);
 
   const showContactDetails = isCommunityLeagueCategory(category);
-  const propertyOptions = useMemo(() => properties, [properties]);
-
-  useEffect(() => {
-    if (!propertyId && properties[0]?.id) {
-      setPropertyId(properties[0].id);
-    }
-  }, [properties, propertyId]);
 
   async function onSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -397,7 +389,7 @@ function HomeownerContactForm({
       await submitHomeownerContact(session.token, {
         category,
         message,
-        propertyId: propertyId || undefined,
+        propertyId: property?.id,
         email: showContactDetails ? email : undefined,
         phone: showContactDetails ? phone : undefined,
       });
@@ -492,28 +484,14 @@ function HomeownerContactForm({
         />
       </label>
 
-      <label className="block">
-        <FieldLabel htmlFor={`${formId}-property`}>
-          Property in question
-        </FieldLabel>
-        <select
-          id={`${formId}-property`}
-          required={propertyOptions.length > 0}
-          value={propertyId}
-          onChange={(event) => setPropertyId(event.target.value)}
-          className={fieldClassName}
-        >
-          {propertyOptions.length === 0 ? (
-            <option value="">No linked properties found</option>
-          ) : (
-            propertyOptions.map((property) => (
-              <option key={property.id} value={property.id}>
-                {property.label}
-              </option>
-            ))
-          )}
-        </select>
-      </label>
+      <PropertySearchField
+        id={`${formId}-property`}
+        label="Property in question"
+        hint="Any Wedgewood address"
+        value={property}
+        onChange={setProperty}
+        suggestions={properties}
+      />
 
       <FormError message={error} />
 
@@ -534,12 +512,16 @@ function PropertySearchField({
   value,
   onChange,
   required,
+  hint,
+  suggestions = [],
 }: {
   id: string;
   label: string;
   value: KnackConnectionOption | null;
   onChange: (next: KnackConnectionOption | null) => void;
   required?: boolean;
+  hint?: string;
+  suggestions?: KnackConnectionOption[];
 }) {
   const [query, setQuery] = useState(value?.label || "");
   const [options, setOptions] = useState<KnackConnectionOption[]>([]);
@@ -596,9 +578,17 @@ function PropertySearchField({
     };
   }, [query, value]);
 
+  const trimmedQuery = query.trim();
+  const showingOwnProperties =
+    suggestions.length > 0 &&
+    (trimmedQuery.length < 2 || (value != null && query === value.label));
+  const visibleOptions = showingOwnProperties ? suggestions : options;
+
   return (
     <div className="relative block">
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
+      <FieldLabel htmlFor={id} hint={hint}>
+        {label}
+      </FieldLabel>
       <input
         id={id}
         required={required && !value}
@@ -615,6 +605,10 @@ function PropertySearchField({
         className={fieldClassName}
         placeholder="Start typing a street address…"
         autoComplete="off"
+        role="combobox"
+        aria-expanded={open && visibleOptions.length > 0}
+        aria-controls={`${id}-options`}
+        aria-autocomplete="list"
       />
       {value ? (
         <p className="mt-2 text-xs text-forest-mid">
@@ -626,9 +620,17 @@ function PropertySearchField({
         <p className="mt-2 text-xs text-brick-deep">{searchError}</p>
       ) : null}
 
-      {open && options.length > 0 ? (
-        <ul className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-forest/20 bg-white shadow-sm">
-          {options.map((option) => (
+      {open && visibleOptions.length > 0 ? (
+        <ul
+          id={`${id}-options`}
+          className="absolute z-20 mt-1 max-h-56 w-full overflow-auto border border-forest/20 bg-white shadow-sm"
+        >
+          {showingOwnProperties ? (
+            <li className="px-3 py-2 text-[0.65rem] uppercase tracking-[0.16em] text-forest-mid">
+              Your properties
+            </li>
+          ) : null}
+          {visibleOptions.map((option) => (
             <li key={option.id}>
               <button
                 type="button"
@@ -645,6 +647,11 @@ function PropertySearchField({
               </button>
             </li>
           ))}
+          {showingOwnProperties ? (
+            <li className="border-t border-forest/10 px-3 py-2 text-xs text-forest-mid">
+              Type a street name to search every Wedgewood address.
+            </li>
+          ) : null}
         </ul>
       ) : null}
     </div>
